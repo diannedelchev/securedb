@@ -1,0 +1,19 @@
+{{if eq .Mode "explorer"}}
+<select id="xp-db-select" title="Database on this server"
+        hx-get="/explorer/schemas" hx-target="#xp-tree" hx-trigger="change, load"
+        hx-vals='js:{connection: "{{.ConnID}}", database: document.getElementById("xp-db-select").value, mode: "explorer"}'>
+  {{$sel := .Selected}}
+  {{range .Databases}}
+  <option value="{{.Name}}" {{if eq .Name $sel}}selected{{end}}>{{.Name}}{{if .IsDefault}} ·default{{end}}</option>
+  {{end}}
+</select>
+{{else}}
+<select id="database-select" name="database" form="query-form" title="Database on this server"
+        hx-get="/explorer/schemas" hx-target="#editor-explorer" hx-trigger="change, load"
+        hx-vals='js:{connection: "{{.ConnID}}", database: document.getElementById("database-select").value}'>
+  {{$sel := .Selected}}
+  {{range .Databases}}
+  <option value="{{.Name}}" {{if eq .Name $sel}}selected{{end}}>{{.Name}}{{if .IsDefault}} ·default{{end}}</option>
+  {{end}}
+</select>
+{{end}}

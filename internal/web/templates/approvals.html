@@ -1,0 +1,127 @@
+<div class="ap">
+  <div class="ap-topbar">
+    <div class="pill-row">
+      <a class="pill {{if eq .Status "pending"}}on{{end}}" href="/approvals?status=pending">Pending {{if .PendingCount}}<span class="mono" style="color:var(--amber)">{{.PendingCount}}</span>{{end}}</a>
+      <a class="pill {{if not .Status}}on{{end}}" href="/approvals">All</a>
+      <a class="pill {{if eq .Status "approved"}}on{{end}}" href="/approvals?status=approved">Approved</a>
+      <a class="pill {{if eq .Status "rejected"}}on{{end}}" href="/approvals?status=rejected">Rejected</a>
+      <a class="pill {{if eq .Status "expired"}}on{{end}}" href="/approvals?status=expired">Expired</a>
+    </div>
+    <div style="flex:1"></div>
+    <span style="font-size:11px;color:#64708A">Requests expire 24 h after creation · approvals execute once</span>
+    <button class="btn-blue" onclick="openModal('grant-modal')">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6zM12 8v4M12 16h.01"></path></svg>
+      Request access window
+    </button>
+  </div>
+  <div class="ap-body">
+    <div class="ap-list">
+      {{if .Grants}}
+      <span class="qh-day" style="margin:0 0 2px">ACCESS WINDOWS (PAM)</span>
+      {{range .Grants}}
+      <div class="ap-card" id="grant-card-{{.ID}}"
+           hx-get="/grants/{{.ID}}" hx-target="#ap-detail" hx-swap="innerHTML"
+           onclick="document.querySelectorAll('.ap-card.sel').forEach(function(e){e.classList.remove('sel')}); this.classList.add('sel')">
+        <div class="ap-card-head">
+          <div class="avatar" style="width:26px;height:26px;font-size:9.5px;background:#2E4E3A;color:#A9F5C7">{{initials .UserName}}</div>
+          <div style="display:flex;flex-direction:column;flex:1;min-width:0">
+            <span style="font-size:12.5px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{.UserName}}</span>
+            <span style="font-size:10.5px;color:#64708A">{{.DurationLabel}} write window</span>
+          </div>
+          <span class="mono" style="font-size:10px;color:{{if .IsPending}}var(--amber){{else}}#64708A{{end}}">{{fmtTime .CreatedAt}}</span>
+        </div>
+        <span class="ap-card-desc">Window on <span class="mono" style="color:var(--text)">{{.ConnectionName}}</span>{{if .Reason}} — {{truncate 56 .Reason}}{{end}}</span>
+        <div style="display:flex;gap:6px;flex-wrap:wrap">
+          <span class="chip {{if eq .Environment "production"}}chip-prod{{else if eq .Environment "staging"}}chip-staging{{else}}chip-dev{{end}}">{{if eq .Environment "production"}}PROD{{else}}{{upper .Environment}}{{end}}</span>
+          <span class="tag-chip mono">JIT ACCESS</span>
+          {{if .IsActive}}
+          <span class="au-sev sev-OK">ACTIVE · {{.Remaining}}</span>
+          {{else}}
+          <span class="au-sev {{if eq .Status "pending"}}sev-WARN{{else if eq .Status "rejected"}}sev-CRITICAL{{else if eq .Status "revoked"}}sev-CRITICAL{{else}}sev-INFO{{end}}">{{upper .Status}}</span>
+          {{end}}
+        </div>
+      </div>
+      {{end}}
+      {{end}}
+      {{if and .Requests .Grants}}<span class="qh-day" style="margin:6px 0 2px">QUERY APPROVALS</span>{{end}}
+      {{if .Requests}}
+      {{range $i, $r := .Requests}}
+      <div class="ap-card{{if eq $i 0}} sel{{end}}" id="ap-card-{{$r.ID}}"
+           hx-get="/approvals/{{$r.ID}}" hx-target="#ap-detail" hx-swap="innerHTML"
+           {{if eq $i 0}}hx-trigger="click, load"{{end}}
+           onclick="document.querySelectorAll('.ap-card.sel').forEach(function(e){e.classList.remove('sel')}); this.classList.add('sel')">
+        <div class="ap-card-head">
+          <div class="avatar" style="width:26px;height:26px;font-size:9.5px;background:#3A2E4E;color:#C7A9F5">{{initials $r.UserEmail}}</div>
+          <div style="display:flex;flex-direction:column;flex:1;min-width:0">
+            <span style="font-size:12.5px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{$r.UserEmail}}</span>
+            <span style="font-size:10.5px;color:#64708A">{{title $r.Environment}} write request</span>
+          </div>
+          <span class="mono" style="font-size:10px;color:{{if $r.IsPending}}var(--amber){{else}}#64708A{{end}}">{{fmtTime $r.CreatedAt}}</span>
+        </div>
+        <span class="ap-card-desc">Write to <span class="mono" style="color:var(--text)">{{$r.ConnectionName}}{{if $r.DatabaseName}}/{{$r.DatabaseName}}{{end}}</span>{{if $r.Reason}} — {{truncate 56 $r.Reason}}{{end}}</span>
+        <div style="display:flex;gap:6px;flex-wrap:wrap">
+          <span class="chip {{if eq $r.Environment "production"}}chip-prod{{else if eq $r.Environment "staging"}}chip-staging{{else}}chip-dev{{end}}">{{if eq $r.Environment "production"}}PROD{{else}}{{upper $r.Environment}}{{end}}</span>
+          <span class="risk {{if ge $r.RiskScore 70}}risk-hi{{else if ge $r.RiskScore 40}}risk-mid{{else}}risk-lo{{end}}">RISK {{if ge $r.RiskScore 70}}HIGH{{else if ge $r.RiskScore 40}}MEDIUM{{else}}LOW{{end}}</span>
+          <span class="au-sev {{if eq $r.Status "approved"}}sev-OK{{else if eq $r.Status "rejected"}}sev-CRITICAL{{else if eq $r.Status "pending"}}sev-WARN{{else}}sev-INFO{{end}}">{{upper $r.Status}}</span>
+        </div>
+      </div>
+      {{end}}
+      {{else}}
+      {{if not .Grants}}
+      <div class="empty" style="padding-top:60px">
+        <div class="icon">✓</div>
+        <h3>No requests</h3>
+        <p>Production write queries and access windows appear here for review.</p>
+      </div>
+      {{end}}
+      {{end}}
+    </div>
+    <div class="ap-detail" id="ap-detail">
+      {{if and (not .Requests) (not .Grants)}}
+      <div class="empty" style="padding-top:80px"><p>Nothing to review.</p></div>
+      {{else if not .Requests}}
+      <div class="empty" style="padding-top:80px"><p>Select a request to review.</p></div>
+      {{end}}
+    </div>
+  </div>
+</div>
+
+<!-- Request access window modal (PAM) -->
+<div class="modal-backdrop" id="grant-modal" style="display:none">
+  <div class="modal">
+    <h2>Request access window</h2>
+    <p class="hint" style="margin-top:-8px">
+      A just-in-time write window: once approved by an Admin or DBA, your write
+      queries on the connection run without per-query approval until it expires.
+      Everything stays audited; blocked keywords and WHERE rules still apply.
+    </p>
+    <form hx-post="/grants" hx-target="#toast-sink">
+      <label class="field">
+        <span class="lbl">CONNECTION</span>
+        <select name="connection_id" required>
+          {{range .Connections}}
+          <option value="{{.ID}}">{{.Name}} · {{title .Environment}}</option>
+          {{end}}
+        </select>
+      </label>
+      <label class="field">
+        <span class="lbl">WINDOW</span>
+        <select name="duration">
+          <option value="30m">30 minutes</option>
+          <option value="1h" selected>1 hour</option>
+          <option value="2h">2 hours</option>
+          <option value="4h">4 hours</option>
+          <option value="8h">8 hours</option>
+        </select>
+      </label>
+      <label class="field">
+        <span class="lbl">REASON (REQUIRED)</span>
+        <input type="text" name="reason" required placeholder="e.g. hotfix for stuck settlement batch — INC-2207">
+      </label>
+      <div class="form-actions">
+        <button class="btn-blue" type="submit" style="height:32px">Submit request</button>
+        <button class="btn-ghost" type="button" style="height:32px" onclick="closeModal('grant-modal')">Cancel</button>
+      </div>
+    </form>
+  </div>
+</div>

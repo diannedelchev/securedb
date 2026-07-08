@@ -1,0 +1,52 @@
+{{if .Connections}}
+<div class="conn-grid">
+  {{range .Connections}}
+  <div class="conn-card{{if .IsProduction}} conn-card-prod{{end}}">
+    <div class="conn-card-head">
+      <div class="conn-icon">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#4D8DFF" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6c0-1.66 3.58-3 8-3s8 1.34 8 3-3.58 3-8 3-8-1.34-8-3zM4 6v12c0 1.66 3.58 3 8 3s8-1.34 8-3V6M4 12c0 1.66 3.58 3 8 3s8-1.34 8-3"></path></svg>
+      </div>
+      <div class="conn-card-title">
+        <div style="display:flex;align-items:center;gap:7px">
+          <span class="conn-card-name">{{.Name}}</span>
+          {{if .IsProduction}}
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#F0524D" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0"><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"></path></svg>
+          {{end}}
+        </div>
+        <span class="conn-card-host mono">{{.Host}}:{{.Port}}/{{.DatabaseName}}</span>
+      </div>
+    </div>
+    <div class="conn-card-chips">
+      <span class="chip {{if eq .Environment "production"}}chip-prod{{else if eq .Environment "staging"}}chip-staging{{else}}chip-dev{{end}}">{{if eq .Environment "production"}}PROD{{else if eq .Environment "staging"}}STAGING{{else}}DEV{{end}}</span>
+      {{if .ReadOnly}}<span class="chip-ro">READ-ONLY</span>{{end}}
+      {{if .SSHEnabled}}<span class="chip-ro" title="via SSH tunnel {{.SSHUser}}@{{.SSHHost}}">SSH</span>{{end}}
+      <span class="tag-chip mono">{{.DBTypeLabel}}</span>
+      {{range .TagList}}<span class="tag-chip mono">{{.}}</span>{{end}}
+    </div>
+    <div class="conn-card-status">
+      <span class="dot {{if .IsActive}}dot-on{{else}}dot-off{{end}}"></span>
+      <span style="color:{{if .IsActive}}var(--green-text){{else}}var(--text-dim){{end}};font-weight:500">{{if .IsActive}}Active{{else}}Inactive{{end}}</span>
+      <span class="csep"></span>
+      <span>{{.LastUsedFmt}}</span>
+      <span style="flex:1"></span>
+      <span class="mono" id="lat-{{.ID}}"></span>
+    </div>
+    <div class="conn-card-foot">
+      <div class="avatar" style="width:20px;height:20px;font-size:8.5px">{{initials .OwnerEmail}}</div>
+      <span class="conn-owner">{{.OwnerEmail}}</span>
+      <button class="btn-ghost" hx-post="/connections/{{.ID}}/test" hx-target="#toast-sink" hx-swap="innerHTML">
+        Test <span class="htmx-indicator spinner"></span>
+      </button>
+      <a class="btn-ghost" href="/connections/{{.ID}}/edit">Details</a>
+      <a class="btn-connect{{if .IsProduction}} btn-connect-prod{{end}}" href="/editor?connection={{.ID}}">Connect</a>
+    </div>
+  </div>
+  {{end}}
+</div>
+{{else}}
+<div class="empty">
+  <div class="icon">⛁</div>
+  <h3>No connections found</h3>
+  <p>Create your first database connection to start querying.</p>
+</div>
+{{end}}

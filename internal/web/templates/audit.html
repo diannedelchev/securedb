@@ -1,0 +1,41 @@
+<div class="au">
+  <div class="au-filters">
+    <form style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;flex:1"
+          hx-get="/audit" hx-target="#audit-table" hx-push-url="true">
+      <div class="searchbox" style="width:300px">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#64708A" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16zM21 21l-4.3-4.3"></path></svg>
+        <input type="text" name="q" placeholder="Search events, users, SQL…" value="{{.Filter.Search}}"
+               style="background:none;border:none;padding:0;font-size:12.5px;flex:1"
+               hx-get="/audit" hx-target="#audit-table" hx-trigger="keyup changed delay:400ms" hx-include="closest form">
+      </div>
+      <div class="pill-row" style="flex-wrap:wrap">
+        <button class="pill {{if not .Cat}}on{{end}}" name="cat" value="" type="submit">All events</button>
+        <button class="pill {{if eq .Cat "auth"}}on{{end}}" name="cat" value="auth" type="submit">Auth</button>
+        <button class="pill {{if eq .Cat "queries"}}on{{end}}" name="cat" value="queries" type="submit">Queries</button>
+        <button class="pill {{if eq .Cat "denied"}}on{{end}}" name="cat" value="denied" type="submit">Denied</button>
+        <button class="pill {{if eq .Cat "exports"}}on{{end}}" name="cat" value="exports" type="submit">Exports</button>
+        <button class="pill {{if eq .Cat "approvals"}}on{{end}}" name="cat" value="approvals" type="submit">Approvals</button>
+        <button class="pill {{if eq .Cat "roles"}}on{{end}}" name="cat" value="roles" type="submit">Role changes</button>
+        <button class="pill {{if eq .Cat "conns"}}on{{end}}" name="cat" value="conns" type="submit">Connections</button>
+      </div>
+    </form>
+    <span class="au-worm">
+      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#34C98E" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"></path></svg>
+      Append-only trail
+    </span>
+  </div>
+  <div class="au-body">
+    <div class="au-list">
+      <div class="au-head"><span>TIME</span><span></span><span>EVENT</span><span>ACTOR</span><span>TARGET</span><span>SEVERITY</span></div>
+      <div class="au-rows" id="audit-table">
+        {{template "partials/audit_table" .}}
+      </div>
+    </div>
+    <aside class="au-inspect" id="audit-detail">
+      <div class="empty" style="padding-top:60px">
+        <h3>Select an event</h3>
+        <p>Full context, statement and origin appear here.</p>
+      </div>
+    </aside>
+  </div>
+</div>

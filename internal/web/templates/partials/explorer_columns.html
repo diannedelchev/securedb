@@ -1,0 +1,22 @@
+<ul>
+  {{range .Columns}}
+  <li>
+    <div class="tree-item" style="cursor:default">
+      <span class="mono" style="color:var(--text)">{{.Name}}</span>
+      <span class="hint">{{.DataType}}{{if .IsPrimary}} 🔑{{end}}{{if not .Nullable}} · not null{{end}}</span>
+    </div>
+  </li>
+  {{end}}
+  {{if .Indexes}}
+  <li><div class="nav-section" style="margin:8px 0 2px">Indexes</div></li>
+  {{range .Indexes}}
+  <li><div class="tree-item" style="cursor:default" title="{{.Definition}}"><span>⚡</span> <span class="mono">{{.Name}}</span></div></li>
+  {{end}}
+  {{end}}
+  {{if .Constraints}}
+  <li><div class="nav-section" style="margin:8px 0 2px">Constraints</div></li>
+  {{range .Constraints}}
+  <li><div class="tree-item" style="cursor:default" title="{{.Def}}"><span>🔗</span> <span class="mono">{{.Name}}</span> <span class="hint">{{.Type}}</span></div></li>
+  {{end}}
+  {{end}}
+</ul>

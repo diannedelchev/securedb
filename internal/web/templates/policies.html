@@ -1,0 +1,166 @@
+<div class="dash">
+  <!-- Posture row -->
+  <div class="sc-kpis">
+    <div class="card sc-score">
+      <div class="sc-gauge" style="background:conic-gradient({{if ge .Stats.Score 80}}#34C98E{{else if ge .Stats.Score 50}}#E8A33D{{else}}#F0524D{{end}} 0deg {{.Stats.Score}}%, #1A2338 0deg)">
+        <div class="sc-gauge-inner">
+          <span class="mono sc-gauge-val">{{.Stats.Score}}</span>
+          <span class="sc-gauge-sub">/ 100</span>
+        </div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:3px">
+        <span class="stat-label">POSTURE SCORE</span>
+        <span style="font-size:12px;color:var(--green-text);font-weight:500">from live policy config</span>
+        <a href="/audit?cat=denied" style="font-size:11px">Review denied events</a>
+      </div>
+    </div>
+    <div class="stat">
+      <div class="label">Blocked queries</div>
+      <div class="value">{{.Stats.BlockedWeek}}<span class="sub">this week</span></div>
+    </div>
+    <div class="stat">
+      <div class="label">Failed logins</div>
+      <div class="value" style="{{if gt .Stats.FailedLogins24h 0}}color:var(--amber){{end}}">{{.Stats.FailedLogins24h}}<span class="sub">last 24h</span></div>
+    </div>
+    <div class="stat">
+      <div class="label">Masking rules</div>
+      <div class="value" style="color:var(--green-text)">{{.Stats.MaskingRules}}<span class="sub">active</span></div>
+    </div>
+    <div class="stat {{if gt .Stats.NoSSLConns 0}}alert-card{{end}}">
+      <div class="label">Connections w/o SSL</div>
+      <div class="value" style="{{if gt .Stats.NoSSLConns 0}}color:var(--amber){{end}}">{{.Stats.NoSSLConns}}<span class="sub">enable TLS</span></div>
+    </div>
+  </div>
+
+  <div class="sc-grid">
+    <!-- Threat timeline -->
+    <div class="card" style="display:flex;flex-direction:column">
+      <div class="card-header" style="margin-bottom:10px">
+        <h2>Threat timeline</h2>
+        <a href="/audit" class="hint">Full audit trail</a>
+      </div>
+      {{if .Threats}}
+      {{$n := len .Threats}}
+      {{range $i, $t := .Threats}}
+      <div class="tl-item">
+        <div class="tl-rail">
+          <span class="tl-dot {{if eq $t.Tag "CRITICAL"}}tl-danger{{else if eq $t.Tag "MEDIUM"}}tl-warn{{else}}tl-info{{end}}" style="width:9px;height:9px"></span>
+          {{if lt (addOne $i) $n}}<span class="tl-line"></span>{{end}}
+        </div>
+        <div class="tl-body" style="padding-bottom:14px">
+          <div style="display:flex;align-items:center;gap:8px">
+            <span style="font-size:12.5px;font-weight:600;color:var(--text)">{{$t.Title}}</span>
+            <span class="au-sev {{if eq $t.Tag "CRITICAL"}}sev-CRITICAL{{else if eq $t.Tag "MEDIUM"}}sev-WARN{{else}}sev-INFO{{end}}">{{$t.Tag}}</span>
+            <span class="mono" style="margin-left:auto;font-size:10.5px;color:var(--text-faint)">{{fmtTime $t.Time}}</span>
+          </div>
+          <span style="font-size:11.5px;color:var(--text-dim);line-height:1.5">{{$t.Body}}</span>
+          <div style="margin-top:3px"><a href="{{$t.LinkHref}}" style="font-size:11px">{{$t.LinkText}}</a></div>
+        </div>
+      </div>
+      {{end}}
+      {{else}}
+      <div class="empty" style="padding:26px"><p>No security events yet. That's a good sign.</p></div>
+      {{end}}
+    </div>
+
+    <!-- Right column: blocked chart + risk indicators -->
+    <div class="dash-col">
+      <div class="card">
+        <div class="card-header" style="margin-bottom:10px">
+          <h2>Blocked queries</h2>
+          <span class="mono" style="font-size:11px;color:#64708A">this week</span>
+        </div>
+        <div class="vol-chart" style="height:56px;gap:6px">
+          {{range .Stats.BlockedByDay}}<div class="vol-bar {{if .Hot}}sc-bar-hot{{else}}vol-warm{{end}}" style="height:{{.HeightPct}}%"></div>{{end}}
+        </div>
+        <div class="vol-axis" style="font-size:9.5px">
+          {{range .Stats.BlockedByDay}}<span>{{.Label}}</span>{{end}}
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;border-top:1px solid var(--border);padding-top:10px;margin-top:10px">
+          <span class="mono" style="font-size:18px;font-weight:600;color:var(--text)">{{.Stats.BlockedWeek}}</span>
+          <span style="font-size:11px;color:var(--text-dim)">blocked</span>
+          <span style="margin-left:auto;font-size:11px;color:{{if gt .Stats.BlockedToday 0}}var(--red-text){{else}}var(--text-dim){{end}}">{{.Stats.BlockedToday}} today</span>
+        </div>
+      </div>
+      <div class="card" style="flex:1">
+        <h2>Risk indicators</h2>
+        <div style="display:flex;flex-direction:column;gap:9px">
+          <div class="env-row"><span class="dot" style="background:{{if gt .Stats.UnboundedDeletes 0}}var(--red){{else}}var(--green){{end}}"></span><span style="flex:1;font-size:12px;color:var(--text-2)">Unbounded DELETE/UPDATE attempts (7d)</span><span class="mono" style="font-size:11.5px;color:{{if gt .Stats.UnboundedDeletes 0}}var(--red-text){{else}}var(--green-text){{end}}">{{.Stats.UnboundedDeletes}}</span></div>
+          <div class="env-row"><span class="dot" style="background:{{if gt .Stats.FailedLogins24h 0}}var(--amber){{else}}var(--green){{end}}"></span><span style="flex:1;font-size:12px;color:var(--text-2)">Failed logins (24h)</span><span class="mono" style="font-size:11.5px;color:{{if gt .Stats.FailedLogins24h 0}}var(--amber){{else}}var(--green-text){{end}}">{{.Stats.FailedLogins24h}}</span></div>
+          <div class="env-row"><span class="dot" style="background:{{if gt .Stats.NoSSLConns 0}}var(--amber){{else}}var(--green){{end}}"></span><span style="flex:1;font-size:12px;color:var(--text-2)">Active connections without SSL</span><span class="mono" style="font-size:11.5px;color:{{if gt .Stats.NoSSLConns 0}}var(--amber){{else}}var(--green-text){{end}}">{{.Stats.NoSSLConns}}</span></div>
+          <div class="env-row"><span class="dot dot-on"></span><span style="flex:1;font-size:12px;color:var(--text-2)">Plaintext credentials at rest</span><span class="mono" style="font-size:11.5px;color:var(--green-text)">0</span></div>
+          <div class="env-row"><span class="dot dot-on"></span><span style="flex:1;font-size:12px;color:var(--text-2)">Disabled user accounts</span><span class="mono" style="font-size:11.5px;color:var(--text-dim)">{{.Stats.InactiveUsers}}</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Policy editors -->
+  <h2 style="margin:8px 0 0;font-size:14px">Environment policies</h2>
+  <div class="grid grid-cols-3">
+    {{$canEdit := .CanEdit}}
+    {{$csrf := .CSRF}}
+    {{range .Policies}}
+    <div class="card">
+      <div class="card-header">
+        <h2><span class="chip {{if eq .Environment "production"}}chip-prod{{else if eq .Environment "staging"}}chip-staging{{else}}chip-dev{{end}}" style="font-size:10px;padding:3px 8px">{{if eq .Environment "production"}}🛡 PRODUCTION{{else}}{{upper .Environment}}{{end}}</span></h2>
+      </div>
+      <form hx-post="/policies/{{.Environment}}" hx-target="#toast-sink" hx-swap="innerHTML">
+        <input type="hidden" name="_csrf" value="{{$csrf}}">
+        <div class="form-row">
+          <label class="field">
+            <span class="lbl">MAX ROWS</span>
+            <input type="number" name="max_rows" value="{{.MaxRows}}" min="1" max="100000" {{if not $canEdit}}disabled{{end}}>
+          </label>
+          <label class="field">
+            <span class="lbl">TIMEOUT (S)</span>
+            <input type="number" name="timeout_seconds" value="{{.TimeoutSeconds}}" min="1" max="600" {{if not $canEdit}}disabled{{end}}>
+          </label>
+        </div>
+        <label class="checkbox"><input type="checkbox" name="allow_export" {{if .AllowExport}}checked{{end}} {{if not $canEdit}}disabled{{end}}> Allow export</label>
+        <label class="checkbox"><input type="checkbox" name="require_approval_writes" {{if .RequireApprovalWrites}}checked{{end}} {{if not $canEdit}}disabled{{end}}> Require approval for writes</label>
+        <label class="checkbox"><input type="checkbox" name="allow_write_queries" {{if .AllowWriteQueries}}checked{{end}} {{if not $canEdit}}disabled{{end}}> Allow write queries</label>
+        <label class="checkbox"><input type="checkbox" name="mask_sensitive_columns" {{if .MaskSensitiveColumns}}checked{{end}} {{if not $canEdit}}disabled{{end}}> Mask sensitive columns</label>
+        <label class="field">
+          <span class="lbl">ALLOWED SCHEMAS <span style="font-weight:400;text-transform:none">(empty = all)</span></span>
+          <input type="text" name="allowed_schemas" value="{{.AllowedSchemas}}" class="mono" {{if not $canEdit}}disabled{{end}}>
+        </label>
+        <label class="field">
+          <span class="lbl">BLOCKED KEYWORDS</span>
+          <input type="text" name="blocked_keywords" value="{{.BlockedKeywords}}" class="mono" {{if not $canEdit}}disabled{{end}}>
+        </label>
+        {{if $canEdit}}
+        <button class="btn-blue" type="submit" style="height:30px;font-size:12px">Save policy</button>
+        {{end}}
+      </form>
+    </div>
+    {{end}}
+  </div>
+
+  <!-- Masking rules -->
+  <div class="card">
+    <div class="card-header">
+      <h2>Data masking rules</h2>
+      <span class="hint">Values in columns matching a pattern are masked before rendering.</span>
+    </div>
+    {{if .Rules}}
+    <div class="table-scroll">
+    <table class="data">
+      <thead><tr><th>Column pattern</th><th>Strategy</th><th>Description</th><th>Status</th></tr></thead>
+      <tbody>
+        {{range .Rules}}
+        <tr>
+          <td class="mono">*{{.ColumnPattern}}*</td>
+          <td><span class="tag-chip mono">{{.Strategy}}</span></td>
+          <td style="color:var(--text-dim)">{{.Description}}</td>
+          <td>{{if .IsActive}}<span class="perm perm-ok">ACTIVE</span>{{else}}<span class="perm" style="color:var(--text-dim);background:var(--border)">INACTIVE</span>{{end}}</td>
+        </tr>
+        {{end}}
+      </tbody>
+    </table>
+    </div>
+    {{else}}
+    <div class="empty"><p>No masking rules configured.</p></div>
+    {{end}}
+  </div>
+</div>

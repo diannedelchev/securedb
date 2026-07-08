@@ -1,0 +1,162 @@
+<div class="sqled">
+  <!-- Production warning banner (toggled by connection selection) -->
+  <div class="sqled-banner" id="prod-banner" style="display:none">
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#F0524D" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"></path></svg>
+    <span class="env-name">PRODUCTION</span>
+    <span class="env-msg">You are connected to a production database. Writes require approval. All queries are audited.</span>
+    <div style="flex:1"></div>
+    <input form="query-form" type="text" name="reason" placeholder="Reason (required for write approval)">
+  </div>
+
+  <div class="sqled-body">
+    <!-- Left: connection + schema tree + saved/history -->
+    <aside class="sqled-tree">
+      <div class="sqled-conn">
+        <span class="dot" id="conn-dot"></span>
+        <select name="connection_id" id="connection-select" form="query-form"
+                hx-get="/explorer/databases" hx-target="#db-select-wrap"
+                hx-trigger="change, load delay:100ms"
+                hx-vals='js:{connection: document.getElementById("connection-select").value, database: document.getElementById("initial-db").value}'
+                hx-on::before-request='document.getElementById("initial-db").value=""'>
+          <option value="">— connection —</option>
+          {{$sel := .SelectedID}}
+          {{range .Connections}}
+          <option value="{{.ID}}" {{if eq .ID $sel}}selected{{end}}
+                  data-env="{{.Environment}}" data-ro="{{if .ReadOnly}}1{{end}}" data-type="{{.DBTypeLabel}}">
+            {{.Name}}
+          </option>
+          {{end}}
+        </select>
+        <span class="chip chip-dev" id="conn-env-chip" style="display:none">DEV</span>
+      </div>
+      <div class="sqled-conn sqled-conn-db">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#64708A" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0"><path d="M4 6c0-1.66 3.58-3 8-3s8 1.34 8 3-3.58 3-8 3-8-1.34-8-3zM4 6v12c0 1.66 3.58 3 8 3s8-1.34 8-3V6M4 12c0 1.66 3.58 3 8 3s8-1.34 8-3"></path></svg>
+        <span id="db-select-wrap" style="flex:1;min-width:0">
+          <span class="hint" style="font-size:11px">database</span>
+        </span>
+        <input type="hidden" id="initial-db" value="{{.InitialDB}}">
+      </div>
+      <div class="sqled-tree-scroll">
+        <div id="editor-explorer" class="explorer-tree">
+          <p class="hint">Select a connection to browse schemas.</p>
+        </div>
+      </div>
+      <div class="sqled-side-section">
+        <h3>Saved queries</h3>
+        <div id="saved-queries">
+          {{template "partials/saved_queries" .}}
+        </div>
+      </div>
+      <div class="sqled-side-section">
+        <h3>Recent</h3>
+        {{if .History}}
+        {{range .History}}
+        <div class="history-item" onclick="setEditorSQL(this.querySelector('.sql-full').textContent)">
+          <div class="sql">{{truncate 40 .QueryText}}</div>
+          <div class="sql-full" style="display:none">{{.QueryText}}</div>
+          <div class="meta"><span class="badge {{statusClass .Status}}">{{.Status}}</span><span>{{fmtTime .CreatedAt}}</span></div>
+        </div>
+        {{end}}
+        {{else}}
+        <p class="hint" style="margin:0">No queries yet.</p>
+        {{end}}
+      </div>
+    </aside>
+
+    <!-- Center: tabs, toolbar, editor, results -->
+    <div class="sqled-main">
+      <div class="sqled-tabs">
+        <div class="sqled-tab active" id="editor-tab">
+          <span id="tab-name">untitled.sql</span>
+          <span class="dirty"></span>
+        </div>
+        <button type="button" class="sqled-tab-plus" title="New query"
+                onclick="setEditorSQL(''); document.getElementById('tab-name').textContent='untitled.sql'">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"></path></svg>
+        </button>
+      </div>
+
+      <form id="query-form"
+            hx-post="/query/execute"
+            hx-target="#query-result"
+            hx-swap="innerHTML"
+            hx-indicator="#exec-indicator"
+            style="display:flex; flex-direction:column; flex:1; min-height:0">
+        <input type="hidden" name="run_id" id="run-id" value="">
+        <input type="hidden" name="approval_id" value="{{.ApprovalID}}">
+
+        <div class="sqled-toolbar">
+          <button class="btn-run" type="submit" id="btn-execute"
+                  onclick="document.getElementById('run-id').value = newRunId()">
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="#fff" stroke="none"><path d="M6 4l14 8-14 8z"></path></svg>
+            Run <kbd>⌘⏎</kbd>
+          </button>
+          <button class="btn-tool" type="button" onclick="toast('info','Explain plan is coming soon')">Explain</button>
+          <button class="btn-tool muted" type="button" id="btn-stop"
+                  hx-post="/query/cancel" hx-target="#toast-sink" hx-include="#run-id">Stop</button>
+          <div class="divider"></div>
+          <button class="icon-btn" type="button" title="Save query" onclick="openModal('save-modal')">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 21V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v16l-6-4z"></path></svg>
+          </button>
+          <button class="icon-btn" type="button" title="Format SQL" onclick="toast('info','SQL formatting is coming soon')">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M4 12h10M4 17h13"></path></svg>
+          </button>
+          <a class="icon-btn" href="/history" title="Query history">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a9 9 0 1 1-9 9M3 12l2-2M3 12l-2-2M12 7v5l3 2"></path></svg>
+          </a>
+          <button class="icon-btn" type="button" title="Export results" onclick="toast('info','Result export is coming soon')">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12M7 10l5 5 5-5M4 21h16"></path></svg>
+          </button>
+          <div style="flex:1"></div>
+          <span id="exec-indicator" class="htmx-indicator"><span class="spinner"></span></span>
+          <div class="limit-chip" id="limit-chip" title="Row limit enforced by the environment security policy"
+               data-limit-development="{{index .Limits "development"}}"
+               data-limit-staging="{{index .Limits "staging"}}"
+               data-limit-production="{{index .Limits "production"}}">LIMIT {{index .Limits "development"}}</div>
+          <span class="chip-ro" id="ro-chip" style="display:none">READ-ONLY</span>
+        </div>
+
+        <div class="sqled-editor">
+          <div class="sqled-gutter" id="sql-gutter">1</div>
+          <textarea name="sql" id="sql-input" spellcheck="false"
+                    placeholder="-- Write SQL here. ⌘⏎ / Ctrl+Enter to run.">{{.InitialSQL}}</textarea>
+        </div>
+      </form>
+
+      <div id="query-result" class="sqled-result">
+        <div class="sqled-status">
+          <span class="st-meta">Ready</span>
+          <div style="flex:1"></div>
+          <div class="st-tabs"><span class="on">Result 1</span><span>Messages</span><span>Plan</span></div>
+        </div>
+        <div class="sqled-empty">Run a query to see results.</div>
+        <div class="sqled-foot">
+          <span class="rows-count">no result</span>
+          <div style="flex:1"></div>
+          <span class="tx">tx: autocommit</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Save query modal -->
+<div class="modal-backdrop" id="save-modal" style="display:none">
+  <div class="modal">
+    <h2>Save query</h2>
+    <form hx-post="/query/save" hx-target="#saved-queries" hx-swap="innerHTML"
+          hx-on::after-request="closeModal('save-modal')">
+      <label class="field">
+        <span class="lbl">Name</span>
+        <input type="text" name="name" required>
+      </label>
+      <input type="hidden" name="sql" id="save-sql">
+      <input type="hidden" name="connection_id" id="save-conn">
+      <div class="form-actions">
+        <button class="btn btn-primary" type="submit"
+                onclick="document.getElementById('save-sql').value=document.getElementById('sql-input').value; document.getElementById('save-conn').value=document.getElementById('connection-select').value; document.getElementById('tab-name').textContent=(this.form.name.value||'untitled')+'.sql'; document.getElementById('editor-tab').classList.remove('is-dirty')">Save</button>
+        <button class="btn" type="button" onclick="closeModal('save-modal')">Cancel</button>
+      </div>
+    </form>
+  </div>
+</div>

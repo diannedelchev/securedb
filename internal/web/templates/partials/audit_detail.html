@@ -1,0 +1,39 @@
+{{$r := .R}}
+<div class="aud-head">
+  <div style="display:flex;align-items:center;gap:8px">
+    <span class="au-icon sev-{{$r.Severity}}">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"></path></svg>
+    </span>
+    <span style="font-size:13.5px;font-weight:600;color:var(--text)">{{$r.Title}}</span>
+    <span class="au-sev sev-{{$r.Severity}}" style="margin-left:auto">{{$r.Severity}}</span>
+  </div>
+  <span class="mono" style="font-size:11px;color:#64708A">{{truncate 8 $r.ID}} · {{fmtTimeFull $r.CreatedAt}}</span>
+</div>
+
+{{if $r.QueryText}}
+<div class="aud-sect">
+  <span class="xpi-label">{{if eq $r.Action "query_blocked"}}BLOCKED STATEMENT{{else}}STATEMENT{{end}}</span>
+  <div class="aud-sql{{if eq $r.Action "query_blocked"}} aud-sql-blocked{{end}}">{{$r.QueryText}}</div>
+  {{if $r.ErrorMessage}}
+  <span style="font-size:11.5px;color:#B4736F;line-height:1.5">{{$r.ErrorMessage}}{{if eq $r.Action "query_blocked"}}. Statement was rejected before reaching the database.{{end}}</span>
+  {{end}}
+</div>
+{{else if $r.ErrorMessage}}
+<div class="aud-sect">
+  <span class="xpi-label">ERROR</span>
+  <span style="font-size:11.5px;color:#B4736F;line-height:1.5">{{$r.ErrorMessage}}</span>
+</div>
+{{end}}
+
+<div class="aud-sect">
+  <span class="xpi-label">CONTEXT</span>
+  <div class="aud-grid">
+    <span class="qh-k">Actor</span><span class="qh-v">{{$r.UserEmail}}</span>
+    <span class="qh-k">Action</span><span class="qh-v mono">{{$r.Action}}</span>
+    {{if $r.Connection}}<span class="qh-k">Connection</span><span class="qh-v mono">{{$r.Connection}}</span>{{end}}
+    {{if $r.EntityType}}<span class="qh-k">Entity</span><span class="qh-v mono">{{$r.EntityType}}{{if $r.EntityID}} · {{truncate 12 $r.EntityID}}{{end}}</span>{{end}}
+    <span class="qh-k">Status</span><span class="qh-v">{{$r.Status}}</span>
+    {{if $r.IP}}<span class="qh-k">Origin</span><span class="qh-v">{{$r.IP}}</span>{{end}}
+    {{if $r.UserAgent}}<span class="qh-k">Client</span><span class="qh-v" style="word-break:break-word">{{truncate 80 $r.UserAgent}}</span>{{end}}
+  </div>
+</div>

@@ -1,0 +1,110 @@
+{{$g := .G}}
+<div class="apd-head">
+  <div style="display:flex;flex-direction:column;gap:4px;flex:1;min-width:0">
+    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+      <span style="font-size:16px;font-weight:600;color:var(--text)">Access window · {{$g.ConnectionName}}</span>
+      {{if $g.IsActive}}
+      <span class="au-sev sev-OK">ACTIVE · {{$g.Remaining}} left</span>
+      {{else}}
+      <span class="au-sev {{if eq $g.Status "pending"}}sev-WARN{{else if eq $g.Status "rejected"}}sev-CRITICAL{{else if eq $g.Status "revoked"}}sev-CRITICAL{{else}}sev-INFO{{end}}">{{upper $g.Status}}</span>
+      {{end}}
+      <span class="tag-chip mono">JIT · {{$g.DurationLabel}} · {{upper $g.Level}}</span>
+    </div>
+    <span style="font-size:12px;color:#64708A">Requested by {{$g.UserName}} ({{$g.UserEmail}}) · {{fmtTimeFull $g.CreatedAt}}</span>
+  </div>
+  {{if and .IsApprover $g.IsPending}}
+  <form hx-post="/grants/{{$g.ID}}/decide" hx-target="#toast-sink" style="display:flex;gap:10px;align-items:center">
+    <input type="text" name="comments" placeholder="Reviewer comment (optional)" style="width:220px;height:34px">
+    <button class="btn-ghost btn-ghost-danger" style="height:34px" name="decision" value="rejected" type="submit">Reject</button>
+    <button class="apd-approve" name="decision" value="approved" type="submit">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"></path></svg>Approve · {{$g.DurationLabel}} window
+    </button>
+  </form>
+  {{end}}
+  {{if and .IsApprover $g.IsActive}}
+  <form hx-post="/grants/{{$g.ID}}/revoke" hx-target="#toast-sink"
+        hx-confirm="Revoke this access window immediately?">
+    <button class="btn-ghost btn-ghost-danger" style="height:34px" type="submit">Revoke now</button>
+  </form>
+  {{end}}
+</div>
+
+<div class="apd-body">
+  <div class="apd-main">
+    <div class="apd-sect">
+      <span class="xpi-label">REASON</span>
+      <span style="font-size:13px;color:var(--text-2);line-height:1.55">{{$g.Reason}}</span>
+    </div>
+    <div class="apd-sect">
+      <span class="xpi-label">SCOPE</span>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <div style="display:flex;align-items:center;gap:10px">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#E8A33D" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0"><path d="M12 9v4M12 17h.01M10.3 3.9L1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"></path></svg>
+          <span style="font-size:12px;color:var(--text-2)">While active, write queries on <span class="mono">{{$g.ConnectionName}}</span> run <strong>without per-query approval</strong></span>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#34C98E" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0"><path d="M20 6L9 17l-5-5"></path></svg>
+          <span style="font-size:12px;color:var(--text-2)">Hard guardrails still apply: blocked keywords, WHERE requirements, read-only mode, row limits</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#34C98E" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0"><path d="M20 6L9 17l-5-5"></path></svg>
+          <span style="font-size:12px;color:var(--text-2)">Every statement remains in the query history and audit trail</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#34C98E" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0"><path d="M20 6L9 17l-5-5"></path></svg>
+          <span style="font-size:12px;color:var(--text-2)">Auto-expires{{if $g.ExpiresAt}} {{fmtTime $g.ExpiresAt.Local}}{{else}} after {{$g.DurationLabel}}{{end}}; Admins/DBAs can revoke early</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <aside class="apd-side">
+    <span class="xpi-label" style="padding:16px 18px 10px">TIMELINE</span>
+    <div style="flex:1;padding:0 18px;display:flex;flex-direction:column">
+      <div class="tl-item">
+        <div class="tl-rail"><span class="tl-dot tl-info" style="width:8px;height:8px"></span><span class="tl-line"></span></div>
+        <div class="tl-body" style="padding-bottom:14px">
+          <span style="font-size:12px;color:var(--text-2)">Access window requested ({{$g.DurationLabel}})</span>
+          <span class="tl-meta mono">{{fmtTimeFull $g.CreatedAt}} · {{$g.UserEmail}}</span>
+        </div>
+      </div>
+      {{if $g.ApproverEmail}}
+      <div class="tl-item">
+        <div class="tl-rail"><span class="tl-dot {{if eq $g.Status "rejected"}}tl-danger{{else}}tl-success{{end}}" style="width:8px;height:8px"></span>{{if or $g.RevokedAt $g.IsActive}}<span class="tl-line"></span>{{end}}</div>
+        <div class="tl-body" style="padding-bottom:14px">
+          <span style="font-size:12px;color:var(--text-2)">{{if eq $g.Status "rejected"}}Rejected{{else}}Approved{{end}} by {{$g.ApproverEmail}}</span>
+          {{if $g.StartsAt}}<span class="tl-meta mono">window {{fmtTime $g.StartsAt.Local}} → {{if $g.ExpiresAt}}{{fmtTime $g.ExpiresAt.Local}}{{end}}</span>{{end}}
+          {{if $g.Comments}}
+          <div style="background:var(--card);border:1px solid var(--border-mid);border-radius:8px;padding:8px 10px;margin-top:4px">
+            <span style="font-size:11.5px;color:var(--text-2);line-height:1.5">{{$g.Comments}}</span>
+          </div>
+          {{end}}
+        </div>
+      </div>
+      {{end}}
+      {{if $g.RevokedAt}}
+      <div class="tl-item">
+        <div class="tl-rail"><span class="tl-dot tl-danger" style="width:8px;height:8px"></span></div>
+        <div class="tl-body">
+          <span style="font-size:12px;color:var(--text-2)">Revoked early by {{$g.RevokedByEmail}}</span>
+          <span class="tl-meta mono">{{fmtTime $g.RevokedAt.Local}}</span>
+        </div>
+      </div>
+      {{else if $g.IsActive}}
+      <div class="tl-item">
+        <div class="tl-rail"><span class="tl-dot tl-success" style="width:8px;height:8px"></span></div>
+        <div class="tl-body">
+          <span style="font-size:12px;color:var(--text-2)">Window active — {{$g.Remaining}} remaining</span>
+        </div>
+      </div>
+      {{else if $g.IsPending}}
+      <div class="tl-item">
+        <div class="tl-rail"><span class="tl-dot tl-warn" style="width:8px;height:8px"></span></div>
+        <div class="tl-body">
+          <span style="font-size:12px;color:var(--text-2)">Waiting on an Admin or DBA (four-eyes: requester cannot self-approve)</span>
+        </div>
+      </div>
+      {{end}}
+    </div>
+  </aside>
+</div>

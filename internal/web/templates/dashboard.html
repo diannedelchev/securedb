@@ -1,0 +1,146 @@
+<div class="dash">
+  <!-- KPI row -->
+  <div class="kpi-row">
+    <div class="stat">
+      <div class="label">Today's queries</div>
+      <div class="value">{{.Stats.QueriesToday}}<span class="sub">across {{.Stats.TotalConnections}} connections</span></div>
+    </div>
+    <div class="stat">
+      <div class="label">Active sessions</div>
+      <div class="value">{{.Stats.ActiveSessions}}</div>
+    </div>
+    <div class="stat">
+      <div class="label">Failed connections</div>
+      <div class="value" style="color:var(--amber)">{{.Stats.FailedConnections}}<span class="sub">last 24h</span></div>
+    </div>
+    <div class="stat">
+      <div class="label">Pending approvals</div>
+      <div class="value">{{.Stats.PendingApprovals}}</div>
+    </div>
+    <div class="stat alert-card">
+      <div class="label">Blocked queries</div>
+      <div class="value" style="color:var(--red)">{{.Stats.BlockedToday}}<span class="sub" style="color:#B4736F">today</span></div>
+    </div>
+  </div>
+
+  <div class="dash-grid">
+    <!-- Column 1: volume chart + slow queries -->
+    <div class="dash-col">
+      <div class="card" id="vol-card">
+        {{template "partials/dash_volume" (dict "V" .Volume)}}
+      </div>
+      <div class="card" style="flex:1">
+        <div class="card-header" style="margin-bottom:8px">
+          <h2>Slow queries</h2>
+          <a href="/history" class="hint">View all</a>
+        </div>
+        {{if .SlowQueries}}
+        <div class="mini-head" style="grid-template-columns:1fr 100px 64px 120px"><span>QUERY</span><span>DATABASE</span><span style="text-align:right">TIME</span><span style="text-align:right">USER</span></div>
+        {{range .SlowQueries}}
+        <div class="mini-row" style="grid-template-columns:1fr 100px 64px 120px">
+          <span class="mono ellip" style="color:var(--text-2)">{{truncate 44 .QueryText}}</span>
+          <span style="color:var(--text-dim)">{{truncate 14 .Connection}}</span>
+          <span class="mono" style="text-align:right; color:{{if gt .DurationMS 10000}}var(--red){{else if gt .DurationMS 3000}}var(--amber){{else}}var(--text-dim){{end}}">{{.DurationMS}}ms</span>
+          <span class="ellip" style="text-align:right; color:var(--text-dim)">{{.UserEmail}}</span>
+        </div>
+        {{end}}
+        {{else}}
+        <div class="empty" style="padding:22px"><p>No queries recorded yet.</p></div>
+        {{end}}
+      </div>
+    </div>
+
+    <!-- Column 2: recent connections + environment status -->
+    <div class="dash-col">
+      <div class="card">
+        <div class="card-header" style="margin-bottom:6px">
+          <h2>Recent connections</h2>
+          <a href="/connections" class="hint">All</a>
+        </div>
+        {{if .RecentConns}}
+        {{range .RecentConns}}
+        <a class="conn-row" href="/editor?connection={{.ID}}">
+          <span class="dot {{if .IsActive}}dot-on{{else}}dot-off{{end}}"></span>
+          <span class="conn-meta">
+            <span class="conn-name">{{.Name}}</span>
+            <span class="conn-sub">{{.DBType}}{{if .LastUsed}} · {{fmtTime .LastUsed.Local}}{{end}}</span>
+          </span>
+          <span class="chip {{if eq .Environment "production"}}chip-prod{{else if eq .Environment "staging"}}chip-staging{{else}}chip-dev{{end}}">{{if eq .Environment "production"}}PROD{{else if eq .Environment "staging"}}STAGING{{else}}DEV{{end}}</span>
+        </a>
+        {{end}}
+        {{else}}
+        <div class="empty" style="padding:22px"><p>No connections yet.</p></div>
+        {{end}}
+      </div>
+      <div class="card" style="flex:1">
+        <h2>Environment status</h2>
+        {{range .EnvStatus}}
+        <div class="env-row">
+          <span class="dot {{if gt .Active 0}}dot-on{{else}}dot-off{{end}}"></span>
+          <span style="flex:1; font-size:12.5px; color:var(--text-2)">{{title .Environment}}</span>
+          <span class="mono" style="font-size:11px; color:{{if eq .Active .Total}}var(--green){{else}}var(--amber){{end}}">{{.Active}}/{{.Total}} active</span>
+          <span class="mono" style="font-size:11px; color:#64708A">{{.Total}} dbs</span>
+        </div>
+        {{end}}
+        <div class="sidebar-rule" style="margin:8px 0"></div>
+        <div class="env-row">
+          <span style="flex:1; font-size:12px; color:var(--text-dim)">Credential encryption</span>
+          <span style="font-size:11px; font-weight:600; color:var(--green)">AES-256-GCM</span>
+        </div>
+        <div class="env-row">
+          <span style="flex:1; font-size:12px; color:var(--text-dim)">Secrets backend</span>
+          <span class="mono" style="font-size:11px; color:var(--text-dim)">local (Vault planned)</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Column 3: pending approvals + activity -->
+    <div class="dash-col">
+      <div class="card">
+        <div class="card-header" style="margin-bottom:8px">
+          <h2>Production access requests</h2>
+          {{if .Stats.PendingApprovals}}<span class="nav-count">{{.Stats.PendingApprovals}}</span>{{end}}
+        </div>
+        {{if .Pending}}
+        {{range .Pending}}
+        <div class="req-card">
+          <div class="req-head">
+            <div class="avatar" style="width:22px;height:22px;font-size:9px;background:#3A2E4E;color:#C7A9F5">{{initials .UserName}}</div>
+            <span class="req-user">{{.UserName}}</span>
+            <span class="mono req-age">{{fmtTime .CreatedAt}}</span>
+          </div>
+          <span class="req-desc">Write access to <span class="mono" style="color:var(--text-2)">{{.ConnName}}</span>{{if .Reason}} — {{truncate 48 .Reason}}{{end}}</span>
+          <div class="req-actions">
+            <a class="req-review" href="/approvals?status=pending">Review</a>
+          </div>
+        </div>
+        {{end}}
+        {{else}}
+        <div class="empty" style="padding:18px"><p>No pending requests.</p></div>
+        {{end}}
+      </div>
+      <div class="card" style="flex:1">
+        <h2>Activity</h2>
+        {{if .Activity}}
+        <div class="timeline">
+          {{$n := len .Activity}}
+          {{range $i, $ev := .Activity}}
+          <div class="tl-item">
+            <div class="tl-rail">
+              <span class="tl-dot tl-{{$ev.Kind}}"></span>
+              {{if lt (addOne $i) $n}}<span class="tl-line"></span>{{end}}
+            </div>
+            <div class="tl-body">
+              <span class="tl-text"><span class="tl-head tl-head-{{$ev.Kind}}">{{$ev.Headline}}</span>{{if $ev.Detail}} — {{truncate 52 $ev.Detail}}{{end}}</span>
+              <span class="tl-meta mono">{{fmtTime $ev.CreatedAt}} · {{$ev.UserEmail}}</span>
+            </div>
+          </div>
+          {{end}}
+        </div>
+        {{else}}
+        <div class="empty" style="padding:22px"><p>No recent activity.</p></div>
+        {{end}}
+      </div>
+    </div>
+  </div>
+</div>

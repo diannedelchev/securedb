@@ -1,0 +1,48 @@
+<div class="xp">
+  <div class="xp-header">
+    <div class="xp-conn">
+      <span class="dot dot-on" style="width:7px;height:7px"></span>
+      <select id="explorer-conn"
+              hx-get="/explorer/databases" hx-target="#xp-db-wrap"
+              hx-trigger="change{{if .SelectedID}}, load{{end}}"
+              hx-vals='js:{connection: document.getElementById("explorer-conn").value, mode: "explorer"}'>
+        <option value="">— connection —</option>
+        {{$sel := .SelectedID}}
+        {{range .Connections}}
+        <option value="{{.ID}}" {{if eq .ID $sel}}selected{{end}} data-env="{{.Environment}}">{{.Name}}</option>
+        {{end}}
+      </select>
+      <span class="chip chip-dev" id="xp-env-chip" style="display:none">DEV</span>
+    </div>
+    <div class="xp-conn" id="xp-db-conn">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#64708A" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6c0-1.66 3.58-3 8-3s8 1.34 8 3-3.58 3-8 3-8-1.34-8-3zM4 6v12c0 1.66 3.58 3 8 3s8-1.34 8-3V6M4 12c0 1.66 3.58 3 8 3s8-1.34 8-3"></path></svg>
+      <span id="xp-db-wrap"><span class="hint" style="font-size:11px">database</span></span>
+    </div>
+    <div class="xp-crumb" id="xp-crumb"><span class="hint">Pick a connection to browse objects.</span></div>
+    <div style="flex:1"></div>
+    <a class="btn-ghost" style="height:32px;padding:0 13px" id="xp-open-editor" href="/editor">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 17l6-5-6-5M13 19h7"></path></svg>Open in SQL editor
+    </a>
+  </div>
+  <div class="xp-body">
+    <aside class="xp-side">
+      <div class="xp-filter">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#64708A" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16zM21 21l-4.3-4.3"></path></svg>
+        <input type="text" placeholder="Filter objects…" oninput="filterTree(this.value)">
+      </div>
+      <div class="xp-tree explorer-tree" id="xp-tree">
+        <div class="empty" style="padding:26px 12px"><p>No connection selected.</p></div>
+      </div>
+    </aside>
+    <div class="xp-detail" id="explorer-detail">
+      <div class="empty" style="padding-top:80px">
+        <div class="icon">
+          <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#4A5570" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 5h18v4H3zM3 10h18v4H3zM3 15h18v4H3z"></path></svg>
+        </div>
+        <h3>Select a table</h3>
+        <p>Columns, constraints and indexes will appear here.</p>
+      </div>
+    </div>
+    <aside class="xp-inspect" id="explorer-inspect"></aside>
+  </div>
+</div>

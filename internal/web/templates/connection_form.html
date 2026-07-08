@@ -1,0 +1,195 @@
+<div class="wizard-wrap">
+  <div class="wizard">
+    <!-- Left rail: steps -->
+    <div class="wizard-rail">
+      <span class="wizard-title">{{if .IsNew}}New connection{{else}}Edit connection{{end}}</span>
+      <span class="wizard-sub">{{if .Conn.DBType}}{{.Conn.DBTypeLabel}}{{else}}PostgreSQL{{end}} · {{title .Conn.Environment}}</span>
+      <div class="wizard-steps">
+        <div class="wstep">
+          <div class="wstep-rail"><span class="wstep-dot">1</span><span class="wstep-line"></span></div>
+          <div class="wstep-body"><span class="wstep-name">Database type</span><span class="wstep-hint">Engine &amp; environment</span></div>
+        </div>
+        <div class="wstep">
+          <div class="wstep-rail"><span class="wstep-dot">2</span><span class="wstep-line"></span></div>
+          <div class="wstep-body"><span class="wstep-name">Connection</span><span class="wstep-hint">Host, port, database</span></div>
+        </div>
+        <div class="wstep">
+          <div class="wstep-rail"><span class="wstep-dot">3</span><span class="wstep-line"></span></div>
+          <div class="wstep-body"><span class="wstep-name">Authentication</span><span class="wstep-hint">Credentials or secret ref</span></div>
+        </div>
+        <div class="wstep">
+          <div class="wstep-rail"><span class="wstep-dot">4</span></div>
+          <div class="wstep-body"><span class="wstep-name">Details &amp; finish</span><span class="wstep-hint">Name, tags, guardrails</span></div>
+        </div>
+      </div>
+      <div style="flex:1"></div>
+      <div class="wizard-note">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#4D8DFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-top:1px;flex-shrink:0"><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"></path></svg>
+        <span>Passwords are encrypted with AES-256-GCM before they touch the database. SecureDB never sends credentials to the browser.</span>
+      </div>
+    </div>
+
+    <!-- Right: form -->
+    <div class="wizard-main">
+      {{if .Error}}<div class="alert alert-error">{{.Error}}</div>{{end}}
+      <form method="post" action="{{if .IsNew}}/connections{{else}}/connections/{{.Conn.ID}}{{end}}">
+        <input type="hidden" name="_csrf" value="{{.CSRF}}">
+
+        <span class="wsection">1 · Database type</span>
+        <div class="form-row">
+          <label class="field">
+            <span class="lbl">ENGINE</span>
+            <select name="db_type" onchange="var p=document.querySelector('input[name=port]'); if(!p.dataset.touched){p.value={postgres:5432,mysql:3306,mssql:1433}[this.value]}">
+              <option value="postgres" {{if eq .Conn.DBType "postgres"}}selected{{end}}>PostgreSQL</option>
+              <option value="mysql" {{if eq .Conn.DBType "mysql"}}selected{{end}}>MySQL / MariaDB</option>
+              <option value="mssql" {{if eq .Conn.DBType "mssql"}}selected{{end}}>Microsoft SQL Server</option>
+            </select>
+          </label>
+          <label class="field">
+            <span class="lbl">ENVIRONMENT</span>
+            <select name="environment">
+              <option value="development" {{if eq .Conn.Environment "development"}}selected{{end}}>Development</option>
+              <option value="staging" {{if eq .Conn.Environment "staging"}}selected{{end}}>Staging</option>
+              <option value="production" {{if eq .Conn.Environment "production"}}selected{{end}}>Production</option>
+            </select>
+          </label>
+        </div>
+
+        <span class="wsection">2 · Connection</span>
+        <div class="form-row">
+          <label class="field" style="grid-column:span 1">
+            <span class="lbl">HOST</span>
+            <input type="text" name="host" value="{{.Conn.Host}}" required>
+          </label>
+          <label class="field">
+            <span class="lbl">PORT</span>
+            <input type="number" name="port" value="{{.Conn.Port}}" min="1" max="65535" required oninput="this.dataset.touched=1">
+          </label>
+        </div>
+        <label class="field">
+          <span class="lbl">DEFAULT DATABASE</span>
+          <input type="text" name="database_name" value="{{.Conn.DatabaseName}}" required>
+          <div class="hint">The editor and explorer can switch to any other database on this server that the credentials can reach.</div>
+        </label>
+        <label class="checkbox"><input type="checkbox" name="ssl_enabled" {{if .Conn.SSLEnabled}}checked{{end}}> SSL / TLS enabled</label>
+        <label class="checkbox">
+          <input type="checkbox" name="ssh_enabled" id="ssh-enabled" {{if .Conn.SSHEnabled}}checked{{end}}
+                 onchange="document.getElementById('ssh-section').style.display = this.checked ? 'block' : 'none'">
+          Connect through an SSH tunnel (bastion / jump host)
+        </label>
+        <div id="ssh-section" style="display:{{if .Conn.SSHEnabled}}block{{else}}none{{end}}; border:1px solid var(--border-mid); border-radius:9px; padding:14px; margin-bottom:14px; background:var(--bg-panel)">
+          <div class="form-row">
+            <label class="field">
+              <span class="lbl">SSH HOST</span>
+              <input type="text" name="ssh_host" value="{{.Conn.SSHHost}}" placeholder="bastion.example.com">
+            </label>
+            <label class="field">
+              <span class="lbl">SSH PORT</span>
+              <input type="number" name="ssh_port" value="{{if .Conn.SSHPort}}{{.Conn.SSHPort}}{{else}}22{{end}}" min="1" max="65535">
+            </label>
+          </div>
+          <div class="form-row">
+            <label class="field">
+              <span class="lbl">SSH USER</span>
+              <input type="text" name="ssh_user" value="{{.Conn.SSHUser}}" autocomplete="off">
+            </label>
+            <label class="field">
+              <span class="lbl">SSH AUTH</span>
+              <select name="ssh_auth" onchange="var k=this.value==='key'; document.getElementById('ssh-pass-field').style.display=k?'none':'block'; document.getElementById('ssh-key-field').style.display=k?'block':'none'">
+                <option value="password" {{if ne .Conn.SSHAuth "key"}}selected{{end}}>Password</option>
+                <option value="key" {{if eq .Conn.SSHAuth "key"}}selected{{end}}>Private key</option>
+              </select>
+            </label>
+          </div>
+          <label class="field" id="ssh-pass-field" style="display:{{if eq .Conn.SSHAuth "key"}}none{{else}}block{{end}}">
+            <span class="lbl">SSH PASSWORD {{if not .IsNew}}<span style="color:var(--text-faint);font-weight:400">(leave blank to keep current)</span>{{end}}</span>
+            <input type="password" name="ssh_password" autocomplete="new-password">
+          </label>
+          <label class="field" id="ssh-key-field" style="display:{{if eq .Conn.SSHAuth "key"}}block{{else}}none{{end}}">
+            <span class="lbl">SSH PRIVATE KEY (PEM) {{if not .IsNew}}<span style="color:var(--text-faint);font-weight:400">(leave blank to keep current)</span>{{end}}</span>
+            <textarea name="ssh_key" class="mono" rows="5" style="font-size:11px" placeholder="-----BEGIN OPENSSH PRIVATE KEY-----"></textarea>
+          </label>
+          <label class="field" style="margin-bottom:0">
+            <span class="lbl">HOST KEY FINGERPRINT <span style="font-weight:400;text-transform:none">(optional pin)</span></span>
+            <input type="text" name="ssh_host_key" value="{{.Conn.SSHHostKey}}" class="mono" placeholder="SHA256:…  (ssh-keygen -lf host_key.pub)">
+            <div class="hint">Empty accepts any host key (development). Pin it for production — mismatches are rejected.</div>
+          </label>
+        </div>
+
+        <span class="wsection">3 · Authentication</span>
+        <div class="auth-cards">
+          <div class="auth-card{{if not .Conn.SecretsReference}} on{{end}}" data-auth="password" onclick="pickAuth(this)">
+            <span class="auth-check"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"></path></svg></span>
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM2 21v-1a6 6 0 0 1 12 0v1M15 8h6M18 5v6"></path></svg>
+            <span class="auth-name">Username / password</span>
+            <span class="auth-hint">Encrypted at rest (AES-256-GCM)</span>
+          </div>
+          <div class="auth-card{{if .Conn.SecretsReference}} on{{end}}" data-auth="secret" onclick="pickAuth(this)">
+            <span class="auth-check"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"></path></svg></span>
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6zM9 12l2 2 4-4"></path></svg>
+            <span class="auth-name">Secrets reference</span>
+            <span class="auth-hint">Vault / AWS Secrets Manager (planned)</span>
+          </div>
+        </div>
+        <label class="field">
+          <span class="lbl">USERNAME</span>
+          <input type="text" name="username" value="{{.Conn.Username}}" required autocomplete="off">
+        </label>
+        <label class="field" id="auth-password">
+          <span class="lbl">PASSWORD {{if not .IsNew}}<span style="color:var(--text-faint);font-weight:400">(leave blank to keep current)</span>{{end}}</span>
+          <input type="password" name="password" autocomplete="new-password">
+        </label>
+        <label class="field" id="auth-secret" style="display:none">
+          <span class="lbl">SECRET PATH</span>
+          <input type="text" name="secrets_reference" value="{{.Conn.SecretsReference}}" placeholder="vault:database/creds/app-readwrite" class="mono">
+        </label>
+
+        <span class="wsection">4 · Details &amp; finish</span>
+        <div class="form-row">
+          <label class="field">
+            <span class="lbl">NAME</span>
+            <input type="text" name="name" value="{{.Conn.Name}}" required>
+          </label>
+          <label class="field">
+            <span class="lbl">TAGS</span>
+            <input type="text" name="tags" value="{{.Conn.Tags}}" placeholder="pci, tier-1">
+          </label>
+        </div>
+        <label class="field">
+          <span class="lbl">DESCRIPTION</span>
+          <input type="text" name="description" value="{{.Conn.Description}}">
+        </label>
+        <label class="checkbox"><input type="checkbox" name="read_only" {{if .Conn.ReadOnly}}checked{{end}}> Read-only mode — blocks all writes at policy and connector level</label>
+        <label class="checkbox"><input type="checkbox" name="is_active" {{if .Conn.IsActive}}checked{{end}}> Active</label>
+
+        <div class="wizard-foot">
+          <a class="btn-ghost" href="/connections" style="height:36px;padding:0 16px">Cancel</a>
+          <div style="flex:1"></div>
+          {{if not .IsNew}}
+          <button class="btn-ghost btn-ghost-danger" type="button"
+                  hx-delete="/connections/{{.Conn.ID}}"
+                  hx-confirm="Delete connection {{.Conn.Name}}? This cannot be undone.">Delete</button>
+          {{end}}
+          <button class="btn-blue" type="submit" style="height:36px">
+            {{if .IsNew}}Create connection{{else}}Save changes{{end}}
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"></path></svg>
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<script>
+function pickAuth(card) {
+  document.querySelectorAll(".auth-card").forEach(function (c) { c.classList.remove("on"); });
+  card.classList.add("on");
+  var isSecret = card.getAttribute("data-auth") === "secret";
+  document.getElementById("auth-password").style.display = isSecret ? "none" : "block";
+  document.getElementById("auth-secret").style.display = isSecret ? "block" : "none";
+}
+document.addEventListener("DOMContentLoaded", function () {
+  var on = document.querySelector(".auth-card.on");
+  if (on) pickAuth(on);
+});
+</script>

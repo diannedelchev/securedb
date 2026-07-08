@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Sign in · SecureDB</title>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/css/app.css">
+</head>
+<body>
+<div class="login-split">
+  <!-- Left: hero -->
+  <div class="login-hero">
+    <div class="login-hero-grid"></div>
+    <div class="brand" style="padding:0; position:relative">
+      <div class="logo" style="width:34px;height:34px;border-radius:8px">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"></path></svg>
+      </div>
+      <div class="brand-text">
+        <span class="brand-name" style="font-size:16px">SecureDB</span>
+        <span class="brand-sub" style="font-size:10.5px">ENTERPRISE</span>
+      </div>
+    </div>
+    <div class="login-pitch">
+      <h1>Mission control for your databases.</h1>
+      <p>Query production safely from your browser. Every session is authenticated, audited, and governed — no desktop client required.</p>
+      <div class="login-points">
+        <div class="login-point">
+          <span class="tick"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#34C98E" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"></path></svg></span>
+          <span>Policy-governed queries with per-environment limits</span>
+        </div>
+        <div class="login-point">
+          <span class="tick"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#34C98E" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"></path></svg></span>
+          <span>Credentials encrypted server-side — never in the browser</span>
+        </div>
+        <div class="login-point">
+          <span class="tick"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#34C98E" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"></path></svg></span>
+          <span>Full audit trail of every query, on every environment</span>
+        </div>
+      </div>
+    </div>
+    <div class="login-compliance">
+      <span>ISO 27001</span><span class="csep"></span><span>SOC 2</span><span class="csep"></span><span>PCI-DSS</span><span class="csep"></span><span>GDPR</span>
+    </div>
+  </div>
+
+  <!-- Right: form -->
+  <div class="login-pane">
+    <div class="login-form">
+      <h2>Sign in</h2>
+      <p class="login-sub">Use your corporate identity to continue.</p>
+      {{if .Error}}<div class="alert alert-error">{{.Error}}</div>{{end}}
+      <button class="sso-btn" type="button" title="Azure AD / Office 365 SSO is planned" onclick="this.blur()" disabled>
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#97A1B7" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11h18M3 11a9 9 0 0 1 18 0M3 11a9 9 0 0 0 18 0M12 2c-2.5 2.5-4 6-4 9s1.5 6.5 4 9c2.5-2.5 4-6 4-9s-1.5-6.5-4-9z"></path></svg>
+        Continue with SSO (coming soon)
+      </button>
+      <div class="or-rule"><div></div><span>OR</span><div></div></div>
+      <form method="post" action="/login">
+        <label class="login-lbl" for="email">WORK EMAIL</label>
+        <input class="login-input" id="email" type="email" name="email" value="{{.Email}}" required autofocus autocomplete="username">
+        <div class="login-lbl-row">
+          <label class="login-lbl" for="password" style="margin-bottom:0">PASSWORD</label>
+        </div>
+        <input class="login-input" id="password" type="password" name="password" required autocomplete="current-password" style="margin-bottom:20px">
+        <button class="signin-btn" type="submit">Sign in</button>
+      </form>
+      <div class="login-note">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#4D8DFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-top:1px;flex-shrink:0"><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"></path></svg>
+        <span>Sessions expire after inactivity. Production write queries require approval and every action is audited.</span>
+      </div>
+      <span class="login-foot">SecureDB Web Client · MVP</span>
+    </div>
+  </div>
+</div>
+</body>
+</html>

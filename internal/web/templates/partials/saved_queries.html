@@ -1,0 +1,19 @@
+{{if .ToastMessage}}<div data-toast data-kind="success" style="display:none">{{.ToastMessage}}</div>{{end}}
+{{if .Saved}}
+{{range .Saved}}
+<div class="history-item">
+  <div style="display:flex; align-items:center; gap:6px">
+    <div style="flex:1; min-width:0" onclick="setEditorSQL(this.parentNode.parentNode.querySelector('.sql-full').textContent)">
+      <strong style="font-size:12px">{{.Name}}</strong>
+      <div class="sql">{{truncate 48 .QueryText}}</div>
+    </div>
+    <button class="btn btn-sm btn-danger" hx-delete="/query/saved/{{.ID}}"
+            hx-target="#saved-queries" hx-swap="innerHTML" hx-confirm="Delete saved query?">✕</button>
+  </div>
+  <div class="sql-full" style="display:none">{{.QueryText}}</div>
+  <div class="meta">{{if .ConnectionName}}<span>{{.ConnectionName}}</span>{{end}}<span>{{fmtTime .CreatedAt}}</span></div>
+</div>
+{{end}}
+{{else}}
+<p class="hint">No saved queries yet.</p>
+{{end}}

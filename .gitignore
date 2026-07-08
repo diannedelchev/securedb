@@ -1,0 +1,5 @@
+.env
+bin/
+config.yaml
+.idea/
+.claude/settings.local.json

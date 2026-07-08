@@ -1,0 +1,28 @@
+{{if .Records}}
+{{range .Records}}
+<div class="au-row" hx-get="/audit/{{.ID}}" hx-target="#audit-detail" hx-swap="innerHTML"
+     onclick="document.querySelectorAll('.au-row.sel').forEach(function(e){e.classList.remove('sel')}); this.classList.add('sel')">
+  <span class="mono au-time">{{.CreatedAt.Local.Format "15:04"}}</span>
+  <span class="au-icon sev-{{.Severity}}">
+    {{if eq .Severity "CRITICAL"}}
+    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6zM15 9l-6 6M9 9l6 6"></path></svg>
+    {{else if eq .Severity "OK"}}
+    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"></path></svg>
+    {{else if eq .Severity "WARN"}}
+    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 9v4M12 17h.01M10.3 3.9L1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"></path></svg>
+    {{else}}
+    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16v-4M12 8h.01M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18z"></path></svg>
+    {{end}}
+  </span>
+  <span class="au-event">
+    <span class="au-title">{{.Title}}</span>
+    <span class="mono au-detail-line">{{if .QueryText}}{{truncate 56 .QueryText}}{{else if .ErrorMessage}}{{truncate 56 .ErrorMessage}}{{else}}{{.EntityType}}{{if .EntityID}} {{truncate 12 .EntityID}}{{end}}{{end}}</span>
+  </span>
+  <span class="au-actor">{{.UserEmail}}</span>
+  <span class="mono au-target">{{if .Connection}}{{.Connection}}{{else}}{{.EntityType}}{{end}}</span>
+  <span class="au-sev sev-{{.Severity}}">{{.Severity}}</span>
+</div>
+{{end}}
+{{else}}
+<div class="empty"><h3>No audit records</h3><p>No events match the current filters.</p></div>
+{{end}}

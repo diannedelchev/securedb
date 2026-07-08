@@ -1,0 +1,38 @@
+<form class="conns-toolbar" hx-get="/history" hx-target="#history-body" hx-push-url="true">
+  <div class="searchbox" style="width:280px">
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#64708A" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16zM21 21l-4.3-4.3"></path></svg>
+    <input type="text" name="q" placeholder="Search SQL text…" value="{{.Search}}"
+           style="background:none;border:none;padding:0;font-size:12.5px;flex:1"
+           hx-get="/history" hx-target="#history-body" hx-trigger="keyup changed delay:400ms" hx-include="closest form">
+  </div>
+  {{if .CanAll}}
+  <div class="pill-row">
+    <button class="pill {{if not .ScopeAll}}on{{end}}" name="scope" value="" type="submit">Mine only</button>
+    <button class="pill {{if .ScopeAll}}on{{end}}" name="scope" value="all" type="submit">All users</button>
+  </div>
+  {{else}}
+  <span class="pill on" style="cursor:default">Mine only</span>
+  {{end}}
+  <select name="env" style="width:auto;font-size:11.5px;padding:5px 9px;border-radius:6px;border-color:var(--border-mid);background:transparent;color:var(--text-dim)"
+          hx-get="/history" hx-target="#history-body" hx-trigger="change" hx-include="closest form">
+    <option value="">Environment</option>
+    <option value="production" {{if eq .Env "production"}}selected{{end}}>Production</option>
+    <option value="staging" {{if eq .Env "staging"}}selected{{end}}>Staging</option>
+    <option value="development" {{if eq .Env "development"}}selected{{end}}>Development</option>
+  </select>
+  <select name="status" style="width:auto;font-size:11.5px;padding:5px 9px;border-radius:6px;border-color:var(--border-mid);background:transparent;color:var(--text-dim)"
+          hx-get="/history" hx-target="#history-body" hx-trigger="change" hx-include="closest form">
+    <option value="">Status</option>
+    <option value="success" {{if eq .Status "success"}}selected{{end}}>Success</option>
+    <option value="blocked" {{if eq .Status "blocked"}}selected{{end}}>Blocked</option>
+    <option value="error" {{if eq .Status "error"}}selected{{end}}>Error</option>
+    <option value="pending_approval" {{if eq .Status "pending_approval"}}selected{{end}}>Pending approval</option>
+    <option value="cancelled" {{if eq .Status "cancelled"}}selected{{end}}>Cancelled</option>
+  </select>
+  <div style="flex:1"></div>
+  <span class="mono" style="font-size:11px;color:#64708A">{{.Count}} queries</span>
+</form>
+
+<div id="history-body">
+  {{template "partials/history_timeline" .}}
+</div>

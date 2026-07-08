@@ -1,0 +1,38 @@
+module github.com/dian/securedb
+
+go 1.26.4
+
+require (
+	github.com/go-sql-driver/mysql v1.10.0
+	github.com/gofiber/fiber/v3 v3.4.0
+	github.com/gofiber/template/html/v2 v2.1.3
+	github.com/google/uuid v1.6.0
+	github.com/jackc/pgx/v5 v5.10.0
+	golang.org/x/crypto v0.53.0
+	gopkg.in/yaml.v3 v3.0.1
+)
+
+require (
+	filippo.io/edwards25519 v1.2.0 // indirect
+	github.com/andybalholm/brotli v1.2.2 // indirect
+	github.com/gofiber/schema v1.8.0 // indirect
+	github.com/gofiber/template v1.8.3 // indirect
+	github.com/gofiber/utils v1.1.0 // indirect
+	github.com/gofiber/utils/v2 v2.1.1 // indirect
+	github.com/jackc/pgpassfile v1.0.0 // indirect
+	github.com/jackc/pgservicefile v0.0.0-20240606120523-5a60cdf6a761 // indirect
+	github.com/jackc/puddle/v2 v2.2.2 // indirect
+	github.com/klauspost/compress v1.19.0 // indirect
+	github.com/kr/text v0.2.0 // indirect
+	github.com/mattn/go-colorable v0.1.15 // indirect
+	github.com/mattn/go-isatty v0.0.22 // indirect
+	github.com/philhofer/fwd v1.2.0 // indirect
+	github.com/rogpeppe/go-internal v1.15.0 // indirect
+	github.com/tinylib/msgp v1.6.4 // indirect
+	github.com/valyala/bytebufferpool v1.0.0 // indirect
+	github.com/valyala/fasthttp v1.72.0 // indirect
+	golang.org/x/net v0.56.0 // indirect
+	golang.org/x/sync v0.21.0 // indirect
+	golang.org/x/sys v0.46.0 // indirect
+	golang.org/x/text v0.38.0 // indirect
+)

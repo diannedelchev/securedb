@@ -1,0 +1,40 @@
+<div class="grid grid-cols-2">
+  <div class="card">
+    <h2>Runtime settings</h2>
+    <p class="hint" style="margin-top:-6px">
+      Stored in the <span class="mono">app_settings</span> table of the application database.
+      Changes apply to new sessions immediately — no restart needed.
+    </p>
+    {{$csrf := .CSRF}}
+    {{range .Settings}}
+    <form hx-post="/settings/{{.Key}}" hx-target="#toast-sink" hx-swap="innerHTML"
+          style="display:flex;gap:10px;align-items:flex-end;margin-bottom:14px">
+      <input type="hidden" name="_csrf" value="{{$csrf}}">
+      <label class="field" style="flex:1;margin:0">
+        <span class="lbl">{{upper .Key}}</span>
+        <input type="text" name="value" value="{{.Value}}" class="mono">
+        <div class="hint">{{.Description}} · updated {{fmtTime .UpdatedAt}}</div>
+      </label>
+      <button class="btn-blue" type="submit" style="height:34px;margin-bottom:22px">Save</button>
+    </form>
+    {{end}}
+  </div>
+  <div class="card">
+    <h2>Configuration sources</h2>
+    <table class="data">
+      <tbody>
+        <tr><td>Bootstrap</td><td><span class="mono">config.yaml</span> <span class="hint">(overridden by environment variables)</span></td></tr>
+        <tr><td>Runtime</td><td><span class="mono">app_settings</span> table <span class="hint">(this page — wins over config.yaml)</span></td></tr>
+        <tr><td>Query guardrails</td><td>Per-environment on <a href="/policies">Security Center</a></td></tr>
+        <tr><td>Credential storage</td><td>AES-256-GCM, key from <span class="mono">app.encryption_key</span></td></tr>
+        <tr><td>Initial account</td><td>Seeded from <span class="mono">seed.admin</span> when the users table is empty</td></tr>
+        <tr><td>Supported engines</td><td>PostgreSQL, MySQL/MariaDB, SQL Server (stub)</td></tr>
+        <tr><td>Authentication</td><td>Local accounts <span class="hint">(Azure AD / Office365 SSO planned)</span></td></tr>
+      </tbody>
+    </table>
+    <p class="hint" style="margin-top:12px">
+      Bootstrap values (listen address, database connection, encryption key) require a restart
+      and cannot be edited here by design.
+    </p>
+  </div>
+</div>

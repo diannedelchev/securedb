@@ -1,0 +1,25 @@
+<div class="conns-toolbar">
+  <form class="conns-filters" hx-get="/connections" hx-target="#conn-table" hx-push-url="true">
+    <div class="searchbox" style="width:280px">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#64708A" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16zM21 21l-4.3-4.3"></path></svg>
+      <input type="text" name="q" placeholder="Search by name, host, tag…" value="{{.Search}}"
+             style="background:none;border:none;padding:0;font-size:12.5px;flex:1"
+             hx-get="/connections" hx-target="#conn-table" hx-trigger="keyup changed delay:400ms" hx-include="closest form">
+    </div>
+    <div class="pill-row">
+      <button class="pill {{if not .Env}}on{{end}}" name="env" value="" type="submit">All</button>
+      <button class="pill {{if eq .Env "production"}}on{{end}}" name="env" value="production" type="submit">Production</button>
+      <button class="pill {{if eq .Env "staging"}}on{{end}}" name="env" value="staging" type="submit">Staging</button>
+      <button class="pill {{if eq .Env "development"}}on{{end}}" name="env" value="development" type="submit">Development</button>
+    </div>
+  </form>
+  <div style="flex:1"></div>
+  <span class="mono" style="font-size:11px;color:#64708A">{{len .Connections}} shown</span>
+  <a class="btn-blue" href="/connections/new">
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"></path></svg>New connection
+  </a>
+</div>
+
+<div id="conn-table">
+  {{template "partials/connections_table" .}}
+</div>

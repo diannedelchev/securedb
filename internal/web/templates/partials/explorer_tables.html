@@ -1,0 +1,33 @@
+<ul>
+  {{$connID := .ConnID}}
+  {{$schema := .Schema}}
+  {{$mode := .Mode}}
+  {{$db := .Database}}
+  {{if .Tables}}
+  {{range .Tables}}
+  <li>
+    {{if eq $mode "explorer"}}
+    <div class="tree-item"
+         hx-get="/explorer/columns?connection={{$connID}}&database={{$db}}&schema={{$schema}}&table={{.Name}}&mode=detail"
+         hx-target="#explorer-detail" hx-swap="innerHTML"
+         onclick="document.querySelectorAll('#xp-tree .tree-item.sel').forEach(function(e){e.classList.remove('sel')}); this.classList.add('sel')">
+    {{else}}
+    <div class="tree-item"
+         hx-get="/explorer/columns?connection={{$connID}}&database={{$db}}&schema={{$schema}}&table={{.Name}}"
+         hx-target="next .tree-children" hx-swap="innerHTML">
+    {{end}}
+      <span class="caret" style="visibility:hidden;width:9px"></span>
+      {{if eq .Type "view"}}
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#64708A" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7zM12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6z"></path></svg>
+      {{else}}
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#64708A" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 5h18v4H3zM3 10h18v4H3zM3 15h18v4H3z"></path></svg>
+      {{end}}
+      <span>{{.Name}}</span>
+    </div>
+    {{if ne $mode "explorer"}}<div class="tree-children"></div>{{end}}
+  </li>
+  {{end}}
+  {{else}}
+  <li><p class="hint" style="padding:6px">No tables in this schema.</p></li>
+  {{end}}
+</ul>

@@ -1,0 +1,97 @@
+<div class="xp-tabs">
+  <span class="xp-tab on" onclick="xpTab(this,'cols')">Columns <span class="mono xp-count">{{len .Columns}}</span></span>
+  {{if .Constraints}}<span class="xp-tab" onclick="xpTab(this,'cons')">Constraints <span class="mono xp-count">{{len .Constraints}}</span></span>{{end}}
+  {{if .Indexes}}<span class="xp-tab" onclick="xpTab(this,'idx')">Indexes <span class="mono xp-count">{{len .Indexes}}</span></span>{{end}}
+</div>
+
+<div class="xp-pane" id="xp-pane-cols">
+  <div class="xp-grid-head"><span>#</span><span>COLUMN</span><span>TYPE</span><span>NULL</span><span>KEY</span><span>DEFAULT</span></div>
+  <div class="xp-grid-body">
+    {{range $i, $col := .Columns}}
+    <div class="xp-grid-row{{if $col.IsPrimary}} pk{{end}}">
+      <span class="mono" style="color:var(--text-faint);font-size:10.5px">{{addOne $i}}</span>
+      <span class="mono xp-colname">
+        {{if $col.IsPrimary}}<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#E8A33D" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7.5 12a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7zM10.4 13.6L21 3M15 4.5l3 3"></path></svg>{{end}}
+        {{$col.Name}}
+      </span>
+      <span class="mono" style="color:var(--col-head)">{{$col.DataType}}</span>
+      <span class="mono" style="font-size:11px;color:{{if $col.Nullable}}#64708A{{else}}var(--col-head){{end}}">{{if $col.Nullable}}YES{{else}}NO{{end}}</span>
+      <span class="mono" style="font-size:11px;color:var(--amber)">{{if $col.IsPrimary}}PK{{end}}</span>
+      <span class="mono ellip" style="font-size:11px;color:#64708A">{{if $col.Default}}{{truncate 34 $col.Default}}{{else}}—{{end}}</span>
+    </div>
+    {{end}}
+  </div>
+</div>
+
+{{if .Constraints}}
+<div class="xp-pane" id="xp-pane-cons" style="display:none">
+  <div class="xp-grid-head" style="grid-template-columns:1fr 120px 2fr"><span>NAME</span><span>TYPE</span><span>DEFINITION</span></div>
+  <div class="xp-grid-body">
+    {{range .Constraints}}
+    <div class="xp-grid-row" style="grid-template-columns:1fr 120px 2fr">
+      <span class="mono xp-colname">{{.Name}}</span>
+      <span class="mono" style="font-size:11px;color:var(--amber)">{{.Type}}</span>
+      <span class="mono ellip" style="font-size:11px;color:var(--col-head)" title="{{.Def}}">{{.Def}}</span>
+    </div>
+    {{end}}
+  </div>
+</div>
+{{end}}
+
+{{if .Indexes}}
+<div class="xp-pane" id="xp-pane-idx" style="display:none">
+  <div class="xp-grid-head" style="grid-template-columns:1fr 2.2fr"><span>NAME</span><span>DEFINITION</span></div>
+  <div class="xp-grid-body">
+    {{range .Indexes}}
+    <div class="xp-grid-row" style="grid-template-columns:1fr 2.2fr">
+      <span class="mono xp-colname">{{.Name}}</span>
+      <span class="mono ellip" style="font-size:11px;color:var(--col-head)" title="{{.Definition}}">{{.Definition}}</span>
+    </div>
+    {{end}}
+  </div>
+</div>
+{{end}}
+
+<!-- Out-of-band updates: breadcrumb + inspector panel -->
+<div id="xp-crumb" hx-swap-oob="innerHTML">
+  <span>{{.Database}}</span>
+  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#4A5570" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"></path></svg>
+  <span>{{.Schema}}</span>
+  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#4A5570" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"></path></svg>
+  <span style="color:var(--text-2);font-weight:500">{{.Table}}</span>
+</div>
+
+<aside id="explorer-inspect" hx-swap-oob="innerHTML">
+  <div class="xpi-head">
+    <div style="display:flex;align-items:center;gap:8px">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#4D8DFF" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 5h18v4H3zM3 10h18v4H3zM3 15h18v4H3z"></path></svg>
+      <span class="mono xpi-name">{{.Table}}</span>
+    </div>
+    <span class="xpi-sub">Table · {{.Database}}.{{.Schema}} · {{.Conn.Name}}</span>
+  </div>
+  <div class="xpi-sect">
+    <span class="xpi-label">OBJECT</span>
+    <div class="xpi-stats">
+      <div><span class="xpi-k">Columns</span><span class="mono xpi-v">{{len .Columns}}</span></div>
+      <div><span class="xpi-k">Indexes</span><span class="mono xpi-v">{{if .Indexes}}{{len .Indexes}}{{else}}—{{end}}</span></div>
+      <div><span class="xpi-k">Constraints</span><span class="mono xpi-v">{{if .Constraints}}{{len .Constraints}}{{else}}—{{end}}</span></div>
+      <div><span class="xpi-k">Environment</span><span class="mono xpi-v">{{title .Conn.Environment}}</span></div>
+    </div>
+  </div>
+  <div class="xpi-sect">
+    <span class="xpi-label">YOUR PERMISSIONS</span>
+    <div class="xpi-perm"><span>SELECT</span><span class="perm perm-ok">GRANTED</span></div>
+    <div class="xpi-perm"><span>INSERT / UPDATE</span>
+      <span class="perm {{if eq .WritePerm "GRANTED"}}perm-ok{{else if eq .WritePerm "APPROVAL"}}perm-warn{{else}}perm-no{{end}}">{{.WritePerm}}</span>
+    </div>
+    <div class="xpi-perm"><span>DDL (DROP / ALTER)</span>
+      <span class="perm {{if eq .DDLPerm "GRANTED"}}perm-ok{{else}}perm-no{{end}}">{{.DDLPerm}}</span>
+    </div>
+  </div>
+  <div class="xpi-sect">
+    <a class="btn-blue" style="width:100%;justify-content:center"
+       href="/editor?connection={{.Conn.ID}}&db={{.Database}}&sql=SELECT * FROM {{.Schema}}.{{.Table}} LIMIT 100">
+      Query this table
+    </a>
+  </div>
+</aside>

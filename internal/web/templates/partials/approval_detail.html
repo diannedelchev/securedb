@@ -1,0 +1,108 @@
+{{$r := .R}}
+<div class="apd-head">
+  <div style="display:flex;flex-direction:column;gap:4px;flex:1;min-width:0">
+    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+      <span style="font-size:16px;font-weight:600;color:var(--text)">Write access to {{$r.ConnectionName}}{{if $r.DatabaseName}} / {{$r.DatabaseName}}{{end}}</span>
+      <span class="au-sev {{if eq $r.Status "approved"}}sev-OK{{else if eq $r.Status "rejected"}}sev-CRITICAL{{else if eq $r.Status "pending"}}sev-WARN{{else}}sev-INFO{{end}}">{{upper $r.Status}}</span>
+    </div>
+    <span style="font-size:12px;color:#64708A">Requested by {{$r.UserEmail}} · {{fmtTimeFull $r.CreatedAt}} · expires {{fmtTime $r.ExpiresAt}}</span>
+  </div>
+  {{if and .IsApprover $r.IsPending}}
+  <form hx-post="/approvals/{{$r.ID}}/decide" hx-target="#toast-sink" style="display:flex;gap:10px;align-items:center">
+    <input type="text" name="comments" placeholder="Reviewer comment (optional)" style="width:220px;height:34px">
+    <button class="btn-ghost btn-ghost-danger" style="height:34px" name="decision" value="rejected" type="submit">Reject</button>
+    <button class="apd-approve" name="decision" value="approved" type="submit">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"></path></svg>Approve
+    </button>
+  </form>
+  {{end}}
+  {{if and .IsOwner $r.CanExecute}}
+  <a class="apd-approve" href="/editor?connection={{$r.ConnectionID}}&db={{$r.DatabaseName}}&approval={{$r.ID}}&sql={{$r.QueryText}}">
+    <svg width="11" height="11" viewBox="0 0 24 24" fill="#fff" stroke="none"><path d="M6 4l14 8-14 8z"></path></svg>Run approved query
+  </a>
+  {{end}}
+</div>
+
+<div class="apd-body">
+  <div class="apd-main">
+    {{if $r.Reason}}
+    <div class="apd-sect">
+      <span class="xpi-label">REASON</span>
+      <span style="font-size:13px;color:var(--text-2);line-height:1.55">{{$r.Reason}}</span>
+    </div>
+    {{end}}
+    <div class="apd-sect">
+      <span class="xpi-label">REQUESTED SQL</span>
+      <div class="apd-sql">{{$r.QueryText}}</div>
+    </div>
+    <div class="apd-sect">
+      <span class="xpi-label">AUTOMATED RISK ANALYSIS</span>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        {{range .Checks}}
+        <div style="display:flex;align-items:center;gap:10px">
+          {{if .OK}}
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#34C98E" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0"><path d="M20 6L9 17l-5-5"></path></svg>
+          {{else}}
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#E8A33D" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0"><path d="M12 9v4M12 17h.01M10.3 3.9L1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"></path></svg>
+          {{end}}
+          <span style="font-size:12px;color:var(--text-2)">{{.Text}}</span>
+        </div>
+        {{end}}
+      </div>
+      <div style="display:flex;align-items:center;gap:10px;margin-top:6px">
+        <span style="font-size:11px;color:#64708A">Risk score</span>
+        <div class="apd-meter"><div style="width:{{$r.RiskScore}}%"></div></div>
+        <span class="mono" style="font-size:12px;font-weight:600;color:{{if ge $r.RiskScore 70}}var(--red-text){{else if ge $r.RiskScore 40}}var(--amber){{else}}var(--green-text){{end}}">{{$r.RiskScore}} / 100 · {{if ge $r.RiskScore 70}}HIGH{{else if ge $r.RiskScore 40}}MEDIUM{{else}}LOW{{end}}</span>
+      </div>
+    </div>
+  </div>
+
+  <aside class="apd-side">
+    <span class="xpi-label" style="padding:16px 18px 10px">TIMELINE</span>
+    <div style="flex:1;padding:0 18px;display:flex;flex-direction:column">
+      <div class="tl-item">
+        <div class="tl-rail"><span class="tl-dot tl-info" style="width:8px;height:8px"></span><span class="tl-line"></span></div>
+        <div class="tl-body" style="padding-bottom:14px">
+          <span style="font-size:12px;color:var(--text-2)">Request created via SQL editor</span>
+          <span class="tl-meta mono">{{fmtTimeFull $r.CreatedAt}} · {{$r.UserEmail}}</span>
+        </div>
+      </div>
+      <div class="tl-item">
+        <div class="tl-rail"><span class="tl-dot tl-success" style="width:8px;height:8px"></span>{{if or $r.ApproverEmail $r.IsPending}}<span class="tl-line"></span>{{end}}</div>
+        <div class="tl-body" style="padding-bottom:14px">
+          <span style="font-size:12px;color:var(--text-2)">Risk analysis completed · score {{$r.RiskScore}}</span>
+          <span class="tl-meta mono">{{fmtTimeFull $r.CreatedAt}} · policy engine</span>
+        </div>
+      </div>
+      {{if $r.ApproverEmail}}
+      <div class="tl-item">
+        <div class="tl-rail"><span class="tl-dot {{if eq $r.Status "approved"}}tl-success{{else}}tl-danger{{end}}" style="width:8px;height:8px"></span>{{if $r.ExecutedAt}}<span class="tl-line"></span>{{end}}</div>
+        <div class="tl-body" style="padding-bottom:14px">
+          <span style="font-size:12px;color:var(--text-2)">{{title $r.Status}} by {{$r.ApproverEmail}}</span>
+          {{if $r.Comments}}
+          <div style="background:var(--card);border:1px solid var(--border-mid);border-radius:8px;padding:8px 10px;margin-top:4px">
+            <span style="font-size:11.5px;color:var(--text-2);line-height:1.5">{{$r.Comments}}</span>
+          </div>
+          {{end}}
+        </div>
+      </div>
+      {{end}}
+      {{if $r.ExecutedAt}}
+      <div class="tl-item">
+        <div class="tl-rail"><span class="tl-dot tl-success" style="width:8px;height:8px"></span></div>
+        <div class="tl-body">
+          <span style="font-size:12px;color:var(--text-2)">Executed (one-time) · {{$r.ExecutedAtFmt}}</span>
+        </div>
+      </div>
+      {{else if $r.IsPending}}
+      <div class="tl-item">
+        <div class="tl-rail"><span class="tl-dot tl-warn" style="width:8px;height:8px"></span></div>
+        <div class="tl-body">
+          <span style="font-size:12px;color:var(--text-2)">Waiting on an Admin or DBA (four-eyes: requester cannot self-approve)</span>
+          <span class="tl-meta mono">expires {{fmtTime $r.ExpiresAt}}</span>
+        </div>
+      </div>
+      {{end}}
+    </div>
+  </aside>
+</div>

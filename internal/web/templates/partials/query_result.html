@@ -1,0 +1,88 @@
+{{$o := .Outcome}}
+{{if eq $o.Status "success"}}
+  {{if $o.Result.Columns}}
+  <div class="sqled-status">
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#34C98E" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"></path></svg>
+    <span class="st-label st-ok">Success</span>
+    <span class="st-meta">{{len $o.Result.Rows}} row{{if ne (len $o.Result.Rows) 1}}s{{end}} fetched{{if $o.Result.Truncated}} (limit reached){{end}} · {{$o.DurationMS}} ms</span>
+    {{if $o.MaskedColumns}}<span class="badge badge-masked">🔒 {{len $o.MaskedColumns}} masked</span>{{end}}
+    {{if $o.UsedGrant}}<span class="au-sev sev-WARN" title="Authorised by an active PAM access window">JIT WINDOW</span>{{end}}
+    <div style="flex:1"></div>
+    <div class="st-tabs"><span class="on">Result 1</span><span>Messages</span><span>Plan</span></div>
+  </div>
+  <div class="rg-scroll">
+    <table class="rg-table">
+      <thead>
+        <tr>
+          <th class="rownum">#</th>
+          {{$masked := $o.MaskedColumns}}
+          {{range $i, $col := $o.Result.Columns}}
+          <th>{{$col}}{{if index $masked $i}} <span class="badge badge-masked">masked</span>{{end}}</th>
+          {{end}}
+        </tr>
+      </thead>
+      <tbody>
+        {{range $ri, $row := $o.Result.Rows}}
+        <tr>
+          <td class="rownum">{{addOne $ri}}</td>
+          {{range $ci, $v := $row}}
+          <td class="{{if eq $v "NULL"}}null{{end}}{{if index $masked $ci}} rg-masked{{end}}">{{$v}}</td>
+          {{end}}
+        </tr>
+        {{end}}
+      </tbody>
+    </table>
+    {{if not $o.Result.Rows}}<div class="sqled-empty" style="min-height:100px">Query returned no rows.</div>{{end}}
+  </div>
+  <div class="sqled-foot">
+    <span class="rows-count">rows 1–{{len $o.Result.Rows}}{{if $o.Result.Truncated}} (more available — raise LIMIT via policy){{end}}</span>
+    <div style="flex:1"></div>
+    <button class="foot-action" type="button" onclick="copyResultRows(this)">
+      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 7h8M8 12h8M8 17h5M4 7h.01M4 12h.01M4 17h.01"></path></svg>Copy rows
+    </button>
+    <button class="foot-action" type="button" onclick="toast('info','CSV export is coming soon')">
+      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12M7 10l5 5 5-5M4 21h16"></path></svg>Export CSV
+    </button>
+    <span class="tx">tx: autocommit</span>
+  </div>
+  {{else}}
+  <div class="sqled-status">
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#34C98E" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"></path></svg>
+    <span class="st-label st-ok">Success</span>
+    <span class="st-meta">{{$o.Result.RowsAffected}} row{{if ne $o.Result.RowsAffected 1}}s{{end}} affected · {{$o.DurationMS}} ms</span>
+    {{if $o.UsedGrant}}<span class="au-sev sev-WARN" title="Authorised by an active PAM access window">JIT WINDOW</span>{{end}}
+    <div style="flex:1"></div>
+    <div class="st-tabs"><span class="on">Messages</span></div>
+  </div>
+  <div class="sqled-empty">Statement executed.</div>
+  <div class="sqled-foot"><span class="rows-count">write statement</span><div style="flex:1"></div><span class="tx">tx: autocommit</span></div>
+  {{end}}
+{{else if eq $o.Status "pending_approval"}}
+  <div class="sqled-status">
+    <span class="st-label st-warn">Approval required</span>
+    <span class="st-meta">risk {{$o.ApprovalRequest.RiskScore}}/100</span>
+    <div style="flex:1"></div>
+  </div>
+  <div class="alert alert-warning sqled-alert">
+    <strong>Approval required.</strong> {{$o.Message}}. Your request was submitted to admins and DBAs.
+    <a href="/approvals">Track it here →</a><br>
+    <span class="hint">Running several statements? Request a time-bound <a href="/approvals">access window (PAM)</a> instead of per-query approvals.</span>
+  </div>
+{{else if eq $o.Status "blocked"}}
+  <div class="sqled-status">
+    <span class="st-label st-err">Blocked</span>
+    <div style="flex:1"></div>
+  </div>
+  <div class="alert alert-error sqled-alert"><strong>Query blocked by policy.</strong> {{$o.Message}}.</div>
+{{else if eq $o.Status "cancelled"}}
+  <div class="sqled-status"><span class="st-label st-warn">Cancelled</span><div style="flex:1"></div></div>
+  <div class="alert alert-warning sqled-alert"><strong>Query cancelled.</strong></div>
+{{else}}
+  <div class="sqled-status">
+    <span class="st-label st-err">Error</span>
+    {{if gt $o.DurationMS 0}}<span class="st-meta">{{$o.DurationMS}} ms</span>{{end}}
+    <div style="flex:1"></div>
+    <div class="st-tabs"><span class="on">Messages</span></div>
+  </div>
+  <div class="alert alert-error sqled-alert"><strong>Query failed.</strong> {{$o.Message}}</div>
+{{end}}

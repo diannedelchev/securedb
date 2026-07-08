@@ -1,0 +1,97 @@
+<div class="conns-toolbar">
+  <form style="display:flex;align-items:center;gap:10px;flex-wrap:wrap" method="get" action="/users">
+    <div class="searchbox" style="width:280px">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#64708A" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16zM21 21l-4.3-4.3"></path></svg>
+      <input type="text" name="q" placeholder="Search users…" value="{{.Search}}"
+             style="background:none;border:none;padding:0;font-size:12.5px;flex:1">
+    </div>
+    <div class="pill-row" style="flex-wrap:wrap">
+      <button class="pill {{if not .Role}}on{{end}}" name="role" value="" type="submit">All roles</button>
+      {{$cur := .Role}}
+      {{range .AllRoles}}
+      <button class="pill {{if eq . $cur}}on{{end}}" name="role" value="{{.}}" type="submit">{{title .}}</button>
+      {{end}}
+    </div>
+  </form>
+  <div style="flex:1"></div>
+  <span class="mono" style="font-size:11px;color:#64708A">{{len .Users}} users</span>
+  <button class="btn-blue" onclick="openModal('user-modal')">
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"></path></svg>New user
+  </button>
+</div>
+
+{{$me := .User}}
+{{$allRoles := .AllRoles}}
+{{$csrf := .CSRF}}
+<div class="ur-head"><span>USER</span><span>ROLE</span><span>ALL ROLES</span><span>PERMISSIONS</span><span>LAST LOGIN</span><span>STATUS</span><span></span></div>
+{{range .Users}}
+<div class="ur-row">
+  <div style="display:flex;align-items:center;gap:10px;min-width:0">
+    <div class="avatar" style="width:28px;height:28px;font-size:10px">{{initials .DisplayName}}</div>
+    <div style="display:flex;flex-direction:column;min-width:0">
+      <span style="font-size:12.5px;font-weight:500;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{.DisplayName}}</span>
+      <span class="mono" style="font-size:10.5px;color:#64708A;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{.Email}}</span>
+    </div>
+  </div>
+  <span class="role-badge role-{{.PrimaryRole}}">{{upper .PrimaryRole}}</span>
+  <div style="display:flex;gap:5px;flex-wrap:wrap;min-width:0">
+    {{range .Roles}}<span class="tag-chip mono">{{.}}</span>{{end}}
+  </div>
+  <span style="font-size:11.5px;color:var(--text-dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{.PermSummary}}</span>
+  <span class="mono" style="font-size:11px;color:#64708A">{{.LastLoginFmt}}</span>
+  <span style="display:flex;align-items:center;gap:6px;font-size:11px;color:{{if .IsActive}}var(--green-text){{else}}var(--red-text){{end}}">
+    <span class="dot" style="width:7px;height:7px;background:{{if .IsActive}}var(--green){{else}}var(--red){{end}}"></span>
+    {{if .IsActive}}Active{{else}}Disabled{{end}}
+  </span>
+  <button class="btn-ghost" onclick="openModal('roles-{{.ID}}')">Manage</button>
+</div>
+
+<!-- Per-user manage modal -->
+<div class="modal-backdrop" id="roles-{{.ID}}" style="display:none">
+  <div class="modal">
+    <h2>{{.DisplayName}}</h2>
+    <p class="hint" style="margin-top:-8px">{{.Email}}</p>
+    <form hx-post="/users/{{.ID}}/roles" hx-target="#toast-sink">
+      <div class="field"><span class="lbl">ROLES</span>
+        {{$u := .}}
+        {{range $allRoles}}
+        <label class="checkbox"><input type="checkbox" name="role_{{.}}" {{if $u.HasRole .}}checked{{end}}> {{title .}}</label>
+        {{end}}
+      </div>
+      <div class="form-actions">
+        <button class="btn-blue" type="submit" style="height:32px">Save roles</button>
+        <button class="btn-ghost" type="button" style="height:32px" onclick="closeModal('roles-{{.ID}}')">Cancel</button>
+      </div>
+    </form>
+    {{if ne .ID $me.ID}}
+    <form hx-post="/users/{{.ID}}/active" hx-target="#toast-sink" style="margin:14px 0 0; border-top:1px solid var(--border); padding-top:14px">
+      <input type="hidden" name="active" value="{{if .IsActive}}false{{else}}true{{end}}">
+      <button class="btn-ghost {{if .IsActive}}btn-ghost-danger{{end}}" style="height:32px" type="submit">
+        {{if .IsActive}}Disable account{{else}}Enable account{{end}}
+      </button>
+    </form>
+    {{end}}
+  </div>
+</div>
+{{end}}
+
+<!-- Create user modal -->
+<div class="modal-backdrop" id="user-modal" style="display:none">
+  <div class="modal">
+    <h2>Create user</h2>
+    <form hx-post="/users" hx-target="#toast-sink">
+      <label class="field"><span class="lbl">DISPLAY NAME</span><input type="text" name="display_name" required></label>
+      <label class="field"><span class="lbl">EMAIL</span><input type="email" name="email" required></label>
+      <label class="field"><span class="lbl">PASSWORD (MIN 8 CHARS)</span><input type="password" name="password" minlength="8" required autocomplete="new-password"></label>
+      <div class="field"><span class="lbl">ROLES</span>
+        {{range .AllRoles}}
+        <label class="checkbox"><input type="checkbox" name="role_{{.}}"> {{title .}}</label>
+        {{end}}
+      </div>
+      <div class="form-actions">
+        <button class="btn-blue" type="submit" style="height:32px">Create user</button>
+        <button class="btn-ghost" type="button" style="height:32px" onclick="closeModal('user-modal')">Cancel</button>
+      </div>
+    </form>
+  </div>
+</div>

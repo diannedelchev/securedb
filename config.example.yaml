@@ -1,0 +1,42 @@
+# SecureDB Web Client configuration
+#
+# Precedence: built-in defaults < this file < environment variables.
+# Runtime-tunable settings (session timeouts) are seeded from here into the
+# app_settings table on first boot and edited afterwards on the Settings page.
+
+app:
+  addr: ":8080"
+  env: development          # development | production
+  cookie_secure: false      # true when serving over HTTPS
+  trust_proxy_ip: false     # true only behind a trusted reverse proxy
+  # REQUIRED — 32-byte hex key for AES-256-GCM credential encryption.
+  # Generate with: openssl rand -hex 32
+  encryption_key: ""
+
+# Application database — an existing PostgreSQL server.
+# (The bundled docker-compose app-db publishes on localhost:5433.)
+# Use either discrete fields or a full `url` (url wins).
+database:
+  host: localhost
+  port: 5432
+  name: securedb
+  user: securedb
+  password: securedb
+  sslmode: disable
+  # url: postgres://securedb:securedb@localhost:5432/securedb?sslmode=disable
+
+sessions:
+  ttl: 8h        # absolute session lifetime
+  idle_ttl: 45m  # idle timeout
+
+seed:
+  # Single login account created on first boot (only when no users exist).
+  # If password is empty, a one-time password is generated and printed to the
+  # server log.
+  admin:
+    email: admin@securedb.local
+    password: ""
+    name: Administrator
+  # Set true to provision demo users + sample connections instead
+  # (used by the docker-compose demo stack).
+  demo_data: false

@@ -1,0 +1,22 @@
+<ul>
+  {{$connID := .ConnID}}
+  {{$mode := .Mode}}
+  {{$db := .Database}}
+  {{if .Schemas}}
+  {{range .Schemas}}
+  <li>
+    <div class="tree-item"
+         hx-get="/explorer/tables?connection={{$connID}}&database={{$db}}&schema={{.Name}}&mode={{$mode}}"
+         hx-target="next .tree-children" hx-swap="innerHTML"
+         onclick="this.classList.toggle('open')">
+      <svg class="caret" width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#4A5570" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"></path></svg>
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#64708A" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path></svg>
+      <span>{{.Name}}</span>
+    </div>
+    <div class="tree-children"></div>
+  </li>
+  {{end}}
+  {{else}}
+  <li><p class="hint" style="padding:6px">No schemas visible (check the allowed schemas policy).</p></li>
+  {{end}}
+</ul>

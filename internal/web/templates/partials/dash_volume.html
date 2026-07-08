@@ -1,0 +1,19 @@
+{{$v := .V}}
+<div class="card-header" style="margin-bottom:12px">
+  <h2>Query volume <span class="mono" style="font-size:11px;color:#64708A;font-weight:400">{{$v.Total}} in {{$v.Range}}</span></h2>
+  <div class="seg">
+    <button class="{{if eq $v.Range "24h"}}on{{end}}" hx-get="/dashboard/volume?range=24h" hx-target="#vol-card" hx-swap="innerHTML">24h</button>
+    <button class="{{if eq $v.Range "7d"}}on{{end}}" hx-get="/dashboard/volume?range=7d" hx-target="#vol-card" hx-swap="innerHTML">7d</button>
+    <button class="{{if eq $v.Range "30d"}}on{{end}}" hx-get="/dashboard/volume?range=30d" hx-target="#vol-card" hx-swap="innerHTML">30d</button>
+  </div>
+</div>
+{{if $v.Bars}}
+<div class="vol-chart">
+  {{range $v.Bars}}<div class="vol-bar vol-{{.Level}}" style="height:{{.HeightPct}}%" title="{{.Label}}"></div>{{end}}
+</div>
+<div class="vol-axis">
+  {{range $v.Axis}}<span>{{.}}</span>{{end}}
+</div>
+{{else}}
+<div class="empty" style="padding:24px"><p>No query volume yet.</p></div>
+{{end}}
