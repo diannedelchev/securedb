@@ -19,6 +19,7 @@ type Handlers struct {
 	Conns    *connections.Service
 	Policies *policies.Service
 	Audit    *audit.Logger
+	Users    *users.Service
 }
 
 // EditorPage renders the SQL editor with connection selector, explorer,
@@ -37,17 +38,20 @@ func (h *Handlers) EditorPage(c fiber.Ctx) error {
 		p, _ := h.Policies.ForEnvironment(c.Context(), env)
 		limits[env] = p.MaxRows
 	}
+	// Saved pane sizes from the user's profile; empty means defaults.
+	layout, _ := h.Users.GetPreference(c.Context(), user.ID, users.PrefEditorLayout)
 	return view.Render(c, "editor", fiber.Map{
-		"Title":       "SQL Editor",
-		"FullBleed":   true,
-		"Connections": conns,
-		"History":     history,
-		"Saved":       saved,
-		"Limits":      limits,
-		"SelectedID":  c.Query("connection"),
-		"InitialSQL":  c.Query("sql"),
-		"InitialDB":   c.Query("db"),
-		"ApprovalID":  c.Query("approval"),
+		"Title":        "SQL Editor",
+		"FullBleed":    true,
+		"Connections":  conns,
+		"History":      history,
+		"Saved":        saved,
+		"Limits":       limits,
+		"SelectedID":   c.Query("connection"),
+		"InitialSQL":   c.Query("sql"),
+		"InitialDB":    c.Query("db"),
+		"ApprovalID":   c.Query("approval"),
+		"EditorLayout": layout,
 	})
 }
 

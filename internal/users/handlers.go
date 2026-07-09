@@ -1,6 +1,8 @@
 package users
 
 import (
+	"encoding/json"
+	"strconv"
 	"strings"
 
 	"github.com/gofiber/fiber/v3"
@@ -108,6 +110,40 @@ func (h *Handlers) SetActive(c fiber.Ctx) error {
 	})
 	c.Set("HX-Redirect", "/users")
 	return c.SendStatus(fiber.StatusOK)
+}
+
+// Pane-size bounds shared with the client-side resizers (app.js).
+const (
+	minTreeWidth, maxTreeWidth       = 160, 480
+	minEditorHeight, maxEditorHeight = 100, 900
+)
+
+// SaveEditorLayout persists the SQL editor pane sizes on the caller's profile.
+func (h *Handlers) SaveEditorLayout(c fiber.Ctx) error {
+	user := currentUser(c)
+	treeWidth, err1 := strconv.Atoi(c.FormValue("tree_width"))
+	editorHeight, err2 := strconv.Atoi(c.FormValue("editor_height"))
+	if err1 != nil || err2 != nil {
+		return fiber.NewError(fiber.StatusBadRequest, "tree_width and editor_height must be integers")
+	}
+	raw, _ := json.Marshal(map[string]int{
+		"tree_width":    clampInt(treeWidth, minTreeWidth, maxTreeWidth),
+		"editor_height": clampInt(editorHeight, minEditorHeight, maxEditorHeight),
+	})
+	if err := h.Svc.SetPreference(c.Context(), user.ID, PrefEditorLayout, string(raw)); err != nil {
+		return err
+	}
+	return c.SendStatus(fiber.StatusNoContent)
+}
+
+func clampInt(v, lo, hi int) int {
+	if v < lo {
+		return lo
+	}
+	if v > hi {
+		return hi
+	}
+	return v
 }
 
 func formRoles(c fiber.Ctx) []string {

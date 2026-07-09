@@ -101,12 +101,12 @@ func main() {
 	engine := web.NewEngine()
 
 	app := fiber.New(fiber.Config{
-		Views:             engine,
-		AppName:           "SecureDB Web Client",
-		ErrorHandler:      errorHandler,
-		ProxyHeader:       proxyHeader(cfg),
-		ReadTimeout:       2 * time.Minute,
-		WriteTimeout:      15 * time.Minute, // long-running queries stream back through here
+		Views:        engine,
+		AppName:      "SecureDB Web Client",
+		ErrorHandler: errorHandler,
+		ProxyHeader:  proxyHeader(cfg),
+		ReadTimeout:  2 * time.Minute,
+		WriteTimeout: 15 * time.Minute, // long-running queries stream back through here
 	})
 	app.Use(recover.New())
 	app.Use(logger.New())
@@ -117,7 +117,7 @@ func main() {
 		Users:       userSvc,
 		UserH:       &users.Handlers{Svc: userSvc, Audit: auditLogger},
 		Connections: &connections.Handlers{Svc: connSvc, Audit: auditLogger},
-		Query:       &query.Handlers{Svc: querySvc, Conns: connSvc, Policies: policySvc, Audit: auditLogger},
+		Query:       &query.Handlers{Svc: querySvc, Conns: connSvc, Policies: policySvc, Audit: auditLogger, Users: userSvc},
 		Approvals:   &approvals.Handlers{Svc: approvalSvc, Grants: grantSvc, Conns: connSvc, Audit: auditLogger},
 		Grants:      &pam.Handlers{Svc: grantSvc, Audit: auditLogger},
 		Audit:       &audit.Handlers{Logger: auditLogger},

@@ -435,6 +435,15 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--a
 }
 .sqled-editor textarea:focus { box-shadow: none; }
 
+/* Pane resizers — drag handles between the schema tree / main column and
+   between the editor / result grid. Sizes persist on the user profile. */
+.sqled-resizer { flex-shrink: 0; background: transparent; position: relative; z-index: 5; transition: background 0.12s; touch-action: none; }
+.sqled-resizer:hover, .sqled-resizer.dragging { background: var(--accent); }
+.sqled-resizer-col { width: 5px; margin: 0 -2px; cursor: col-resize; }
+.sqled-resizer-row { height: 5px; margin: -2px 0; cursor: row-resize; }
+body.sqled-resizing { cursor: inherit; user-select: none; -webkit-user-select: none; }
+body.sqled-resizing iframe, body.sqled-resizing textarea { pointer-events: none; }
+
 /* Status bar */
 .sqled-status {
   display: flex; align-items: center; gap: 10px; min-height: 32px;

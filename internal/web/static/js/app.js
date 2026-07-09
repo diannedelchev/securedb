@@ -142,6 +142,84 @@
     });
   };
 
+  // --- SQL editor: resizable panes (persisted on the user profile) ---------
+  // Bounds mirror the server-side clamps in users.SaveEditorLayout.
+  var PANE = {
+    tree: { min: 160, max: 480, def: 216 },
+    editor: { min: 100, max: 900, def: 252 }
+  };
+
+  function clamp(v, b) { return Math.min(b.max, Math.max(b.min, v)); }
+
+  function csrfToken() {
+    try {
+      return JSON.parse(document.body.getAttribute("hx-headers"))["X-CSRF-Token"] || "";
+    } catch (e) { return ""; }
+  }
+
+  function initEditorResize() {
+    var root = document.getElementById("sqled");
+    var tree = document.querySelector(".sqled-tree");
+    var editor = document.querySelector(".sqled-editor");
+    if (!root || !tree || !editor) return;
+
+    // Apply the layout saved on the user profile (empty attribute = defaults).
+    var saved = {};
+    try { saved = JSON.parse(root.getAttribute("data-layout") || "{}") || {}; } catch (e) {}
+    if (saved.tree_width) tree.style.width = clamp(saved.tree_width, PANE.tree) + "px";
+    if (saved.editor_height) editor.style.height = clamp(saved.editor_height, PANE.editor) + "px";
+
+    var saveTimer = null;
+    function persistLayout() {
+      clearTimeout(saveTimer);
+      saveTimer = setTimeout(function () {
+        var body = new URLSearchParams();
+        body.set("_csrf", csrfToken());
+        body.set("tree_width", Math.round(tree.getBoundingClientRect().width));
+        body.set("editor_height", Math.round(editor.getBoundingClientRect().height));
+        fetch("/profile/editor-layout", { method: "POST", body: body }).catch(function () {});
+      }, 400);
+    }
+
+    function bindResizer(handle, onMove, reset) {
+      if (!handle) return;
+      handle.addEventListener("pointerdown", function (e) {
+        e.preventDefault();
+        handle.setPointerCapture(e.pointerId);
+        handle.classList.add("dragging");
+        document.body.classList.add("sqled-resizing");
+        function move(ev) { onMove(ev); }
+        function up() {
+          handle.classList.remove("dragging");
+          document.body.classList.remove("sqled-resizing");
+          handle.removeEventListener("pointermove", move);
+          handle.removeEventListener("pointerup", up);
+          handle.removeEventListener("pointercancel", up);
+          persistLayout();
+        }
+        handle.addEventListener("pointermove", move);
+        handle.addEventListener("pointerup", up);
+        handle.addEventListener("pointercancel", up);
+      });
+      handle.addEventListener("dblclick", function () {
+        reset();
+        persistLayout();
+      });
+    }
+
+    bindResizer(document.getElementById("tree-resizer"), function (ev) {
+      tree.style.width = clamp(ev.clientX - tree.getBoundingClientRect().left, PANE.tree) + "px";
+    }, function () {
+      tree.style.width = PANE.tree.def + "px";
+    });
+
+    bindResizer(document.getElementById("editor-resizer"), function (ev) {
+      editor.style.height = clamp(ev.clientY - editor.getBoundingClientRect().top, PANE.editor) + "px";
+    }, function () {
+      editor.style.height = PANE.editor.def + "px";
+    });
+  }
+
   // --- Database explorer helpers -------------------------------------------
   window.xpTab = function (tab, key) {
     document.querySelectorAll(".xp-tab").forEach(function (t) { t.classList.remove("on"); });
@@ -199,5 +277,6 @@
       sel.addEventListener("change", refreshConnMeta);
       refreshConnMeta();
     }
+    initEditorResize();
   });
 })();

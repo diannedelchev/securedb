@@ -2,6 +2,7 @@ package users
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -226,6 +227,30 @@ func (s *Service) SetRoles(ctx context.Context, userID string, roles []string) e
 
 func (s *Service) SetActive(ctx context.Context, userID string, active bool) error {
 	_, err := s.pool.Exec(ctx, `UPDATE users SET is_active=$2, updated_at=now() WHERE id=$1`, userID, active)
+	return err
+}
+
+// Preference keys stored in user_preferences.
+const PrefEditorLayout = "editor_layout"
+
+// GetPreference returns the stored value for a per-user preference key, or ""
+// when the user has never set it.
+func (s *Service) GetPreference(ctx context.Context, userID, key string) (string, error) {
+	var v string
+	err := s.pool.QueryRow(ctx,
+		`SELECT value FROM user_preferences WHERE user_id=$1 AND key=$2`, userID, key).Scan(&v)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", nil
+	}
+	return v, err
+}
+
+// SetPreference upserts a per-user preference value.
+func (s *Service) SetPreference(ctx context.Context, userID, key, value string) error {
+	_, err := s.pool.Exec(ctx,
+		`INSERT INTO user_preferences (user_id, key, value) VALUES ($1,$2,$3)
+		 ON CONFLICT (user_id, key) DO UPDATE SET value=EXCLUDED.value, updated_at=now()`,
+		userID, key, value)
 	return err
 }
 

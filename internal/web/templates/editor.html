@@ -1,4 +1,4 @@
-<div class="sqled">
+<div class="sqled" id="sqled" data-layout="{{.EditorLayout}}">
   <!-- Production warning banner (toggled by connection selection) -->
   <div class="sqled-banner" id="prod-banner" style="display:none">
     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#F0524D" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"></path></svg>
@@ -63,6 +63,9 @@
       </div>
     </aside>
 
+    <div class="sqled-resizer sqled-resizer-col" id="tree-resizer"
+         title="Drag to resize · double-click to reset"></div>
+
     <!-- Center: tabs, toolbar, editor, results -->
     <div class="sqled-main">
       <div class="sqled-tabs">
@@ -81,7 +84,7 @@
             hx-target="#query-result"
             hx-swap="innerHTML"
             hx-indicator="#exec-indicator"
-            style="display:flex; flex-direction:column; flex:1; min-height:0">
+            style="display:flex; flex-direction:column; flex-shrink:0">
         <input type="hidden" name="run_id" id="run-id" value="">
         <input type="hidden" name="approval_id" value="{{.ApprovalID}}">
 
@@ -122,6 +125,9 @@
                     placeholder="-- Write SQL here. ⌘⏎ / Ctrl+Enter to run.">{{.InitialSQL}}</textarea>
         </div>
       </form>
+
+      <div class="sqled-resizer sqled-resizer-row" id="editor-resizer"
+           title="Drag to resize · double-click to reset"></div>
 
       <div id="query-result" class="sqled-result">
         <div class="sqled-status">
