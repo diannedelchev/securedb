@@ -1,20 +1,14 @@
 # SecureDB Web Client — development tasks
 #
 # Quick start:
-#   make env      # create .env with a generated encryption key
+#   make config   # create config.yaml with a generated encryption key
 #   make dev      # start databases (Docker) + run the app locally
 # or fully containerized:
 #   make up
+#
+# All configuration lives in config.yaml (see config.example.yaml).
 
 SHELL := /bin/bash
-
-# Load .env if present so `make run` picks up local configuration.
--include .env
-export
-
-APP_ADDR            ?= :8080
-DATABASE_URL        ?= postgres://securedb:securedb@localhost:5433/securedb?sslmode=disable
-SEED_DEMO_DATA      ?= true
 
 BINARY  := bin/securedb
 DB_SVCS := app-db target-postgres target-mysql
@@ -34,12 +28,6 @@ config: ## Create config.yaml from config.example.yaml with a generated encrypti
 	@sed "s/^  encryption_key: \"\"/  encryption_key: \"$$(openssl rand -hex 32)\"/" config.example.yaml > config.yaml
 	@echo "created config.yaml with generated encryption key — review the database section"
 
-.PHONY: env
-env: ## Create .env from .env.example with a freshly generated encryption key
-	@if [ -f .env ]; then echo ".env already exists — not overwriting"; exit 1; fi
-	@sed "s/^APP_ENCRYPTION_KEY=.*/APP_ENCRYPTION_KEY=$$(openssl rand -hex 32)/" .env.example > .env
-	@echo "created .env with generated APP_ENCRYPTION_KEY"
-
 .PHONY: key
 key: ## Print a new 32-byte hex encryption key
 	@openssl rand -hex 32
@@ -51,9 +39,9 @@ build: ## Build the server binary to bin/securedb
 	go build -o $(BINARY) ./cmd/server
 
 .PHONY: run
-run: ## Run the app locally (uses config.yaml; env vars override)
-	@if [ ! -f config.yaml ] && [ -z "$$APP_ENCRYPTION_KEY" ]; then \
-		echo "no config.yaml and APP_ENCRYPTION_KEY not set — run 'make config' or 'make env' first"; exit 1; fi
+run: ## Run the app locally (configured via config.yaml)
+	@if [ ! -f config.yaml ]; then \
+		echo "no config.yaml — run 'make config' first"; exit 1; fi
 	go run ./cmd/server
 
 .PHONY: dev

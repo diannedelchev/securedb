@@ -6,58 +6,16 @@ services:
     ports:
       - "8080:8080"
     environment:
-      APP_ADDR: ":8080"
-      DATABASE_URL: "postgres://securedb:securedb@app-db:5432/securedb?sslmode=disable"
-      # Dev-only key. Generate your own for anything real:
-      #   openssl rand -hex 32
-      APP_ENCRYPTION_KEY: "5f2b0f8b6d3e4a1c9d8e7f6a5b4c3d2e1f0a9b8c7d6e5f4a3b2c1d0e9f8a7b6c"
-      SEED_DEMO_DATA: "true"
-      COOKIE_SECURE: "false"
-    depends_on:
-      app-db:
-        condition: service_healthy
+      CONFIG_FILE: /etc/securedb/config.yaml
+    volumes:
+      # All configuration comes from config.yaml (create it with `make config`,
+      # see config.example.yaml). NOTE: inside the container `localhost` is the
+      # container itself — set database.host to `host.docker.internal` to reach
+      # a PostgreSQL server running on the Docker host.
+      - ./config.yaml:/etc/securedb/config.yaml:ro
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     restart: unless-stopped
-
-  app-db:
-    image: postgres:16-alpine
-    environment:
-      POSTGRES_USER: securedb
-      POSTGRES_PASSWORD: securedb
-      POSTGRES_DB: securedb
-    volumes:
-      - app-db-data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U securedb"]
-      interval: 5s
-      timeout: 3s
-      retries: 10
-    ports:
-      - "5433:5432"
-
-  # Sample PostgreSQL target database (what users query through SecureDB)
-  target-postgres:
-    image: postgres:16-alpine
-    environment:
-      POSTGRES_USER: demo
-      POSTGRES_PASSWORD: demo
-      POSTGRES_DB: demodb
-    volumes:
-      - ./docker/target-postgres-init.sql:/docker-entrypoint-initdb.d/init.sql:ro
-    ports:
-      - "5434:5432"
-
-  # Sample MySQL target database
-  target-mysql:
-    image: mysql:8.4
-    environment:
-      MYSQL_ROOT_PASSWORD: root
-      MYSQL_DATABASE: demodb
-      MYSQL_USER: demo
-      MYSQL_PASSWORD: demo
-    volumes:
-      - ./docker/target-mysql-init.sql:/docker-entrypoint-initdb.d/init.sql:ro
-    ports:
-      - "3307:3306"
 
   # Optional Redis (not required by the MVP; enable with --profile cache)
   redis:
@@ -65,6 +23,3 @@ services:
     profiles: ["cache"]
     ports:
       - "6379:6379"
-
-volumes:
-  app-db-data:

@@ -57,6 +57,9 @@ func Register(app *fiber.App, d Deps) {
 	staticSub, _ := fs.Sub(staticFS, "static")
 	app.Get("/static/*", static.New("", static.Config{FS: staticSub, MaxAge: 3600}))
 
+	// Public marketing pages (home falls through to the dashboard when signed in).
+	registerSite(app, d)
+
 	app.Get("/login", d.Auth.LoginPage)
 	app.Post("/login", d.Auth.Login)
 

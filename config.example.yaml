@@ -14,8 +14,9 @@ app:
   encryption_key: ""
 
 # Application database — an existing PostgreSQL server.
-# (The bundled docker-compose app-db publishes on localhost:5433.)
 # Use either discrete fields or a full `url` (url wins).
+# When running the app via docker-compose, use host.docker.internal instead
+# of localhost to reach a PostgreSQL server on the Docker host.
 database:
   host: localhost
   port: 5432

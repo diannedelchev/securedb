@@ -55,12 +55,12 @@ Configuration is layered — later sources win:
 
 1. **Built-in defaults**
 2. **`config.yaml`** (path via `CONFIG_FILE`, default `./config.yaml`) — see
-   `config.example.yaml`. Points the app at an **existing PostgreSQL server**
-   (`database.host/port/name/user/password` or a full `database.url`), sets the
-   listen address, encryption key, session lifetimes and the seed account.
-3. **Environment variables** (`APP_ADDR`, `DATABASE_URL`, `APP_ENCRYPTION_KEY`,
-   `SESSION_TTL`, `SEED_ADMIN_EMAIL`, …) — used by the docker-compose stack.
-4. **`app_settings` table** in the application database — runtime-tunable
+   `config.example.yaml`. This is the single configuration file: it points the
+   app at an **existing PostgreSQL server** (`database.host/port/name/user/password`
+   or a full `database.url`), sets the listen address, encryption key, session
+   lifetimes and the seed account. The docker-compose stack mounts the same file
+   into the container. Create it with `make config`.
+3. **`app_settings` table** in the application database — runtime-tunable
    settings (session TTL / idle TTL). Seeded from config on first boot, edited
    afterwards on the admin **Settings** page; changes apply without a restart
    and the database value wins.
@@ -79,9 +79,8 @@ seed:
     name: Administrator
 ```
 
-Create further users on **Users & Roles**. Setting `seed.demo_data: true` (or
-`SEED_DEMO_DATA=true`, as the docker-compose demo stack does) provisions the
-demo users and sample connections below instead.
+Create further users on **Users & Roles**. Setting `seed.demo_data: true` in
+`config.yaml` provisions the demo users and sample connections below instead.
 
 ### Demo accounts (docker-compose demo stack)
 
@@ -132,6 +131,7 @@ the requester's account with the one-time **Run approved query** button.
 
 | Screen | What it does |
 |---|---|
+| **Public site** | Marketing homepage at `/` for anonymous visitors (signed-in users land on the Dashboard), plus `/features`, `/privacy` and `/terms` — served from the same binary in the same design system |
 | **Dashboard** | KPI cards, 24h query-volume histogram, slow queries, recent connections, environment status, pending access requests, activity timeline |
 | **Connections** | Card grid with env/read-only/tag chips, last-used, test/edit/connect; wizard-style create/edit form with selectable auth methods. **One connection covers every database on the server** — it stores a default database, and the editor/explorer can switch to any other database the credentials can reach (PostgreSQL via `pg_database`, MySQL via schemas) |
 | **SQL Editor** | Full-bleed IDE: schema tree, tabs, Run ⌘⏎ / Explain / Stop, policy-driven LIMIT + READ-ONLY chips, line-numbered editor, result grid with masking badges, Copy rows, saved queries & history rail; production banner with approval-reason input |
@@ -159,8 +159,8 @@ the requester's account with the one-time **Run approved query** button.
 
 ## Security model
 
-- Passwords: bcrypt. DB credentials: AES-256-GCM with `APP_ENCRYPTION_KEY`;
-  never rendered to any template.
+- Passwords: bcrypt. DB credentials: AES-256-GCM with `app.encryption_key`
+  from `config.yaml`; never rendered to any template.
 - Sessions: opaque 256-bit cookie token, hash stored server-side; `HttpOnly`,
   `SameSite=Lax`, `Secure` in production; idle + absolute expiry.
 - CSRF: per-session token verified on every state-changing request (form field
