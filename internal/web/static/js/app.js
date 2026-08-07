@@ -68,6 +68,8 @@
     if (ta) {
       ta.value = sql;
       ta.focus();
+      refreshGutter();
+      refreshHighlight();
     }
   };
 
@@ -78,6 +80,90 @@
       if (btn) { e.preventDefault(); btn.click(); }
     }
   });
+
+  // --- SQL editor: syntax highlighting --------------------------------------
+  // A <pre> render layer sits behind the transparent-text textarea; on every
+  // edit the SQL is re-tokenized into colored spans and scroll is kept in sync.
+  var SQL_KEYWORDS = new Set((
+    "select from where and or not null insert into values update set delete " +
+    "create table alter drop index view materialized sequence trigger function procedure " +
+    "join left right inner outer full cross on as order by group having limit offset " +
+    "distinct union all intersect except case when then else end if exists in is like " +
+    "ilike similar between asc desc nulls first last primary key foreign references " +
+    "default constraint unique check begin commit rollback transaction savepoint " +
+    "explain analyze vacuum grant revoke truncate returning with recursive over " +
+    "partition window using natural cast collate true false unknown add column rename " +
+    "to database schema temp temporary replace show describe use lateral fetch only " +
+    "row rows filter within escape any some current_date current_time current_timestamp " +
+    "int integer bigint smallint serial bigserial text varchar char character boolean bool " +
+    "date timestamp timestamptz time interval numeric decimal float real double precision " +
+    "json jsonb uuid bytea array enum money bit varying"
+  ).split(" "));
+
+  function escapeHTML(s) {
+    return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  }
+
+  var SQL_TOKEN_RE = new RegExp(
+    "(\\/\\*[\\s\\S]*?(?:\\*\\/|$))" +          // 1 block comment
+    "|(--[^\\n]*|#[^\\n]*)" +                    // 2 line comment
+    "|('(?:[^']|'')*'?)" +                       // 3 string ('' escapes)
+    "|(\"(?:[^\"]|\"\")*\"?|`[^`\\n]*`?)" +      // 4 quoted identifier
+    "|(\\b0x[0-9a-fA-F]+\\b|\\b\\d+(?:\\.\\d+)?(?:[eE][+-]?\\d+)?\\b)" + // 5 number
+    "|([A-Za-z_][A-Za-z0-9_$]*)" +               // 6 word
+    "|(::|[+\\-*/%<>=!|&~^@#]+)",                // 7 operator
+    "g"
+  );
+
+  function highlightSQL(src) {
+    var out = "";
+    var last = 0;
+    var m;
+    SQL_TOKEN_RE.lastIndex = 0;
+    while ((m = SQL_TOKEN_RE.exec(src)) !== null) {
+      out += escapeHTML(src.slice(last, m.index));
+      last = SQL_TOKEN_RE.lastIndex;
+      var text = escapeHTML(m[0]);
+      if (m[1] || m[2]) {
+        out += '<span class="sql-com">' + text + "</span>";
+      } else if (m[3]) {
+        out += '<span class="sql-str">' + text + "</span>";
+      } else if (m[4]) {
+        out += text; // quoted identifiers keep the base color
+      } else if (m[5]) {
+        out += '<span class="sql-num">' + text + "</span>";
+      } else if (m[6]) {
+        if (SQL_KEYWORDS.has(m[0].toLowerCase())) {
+          out += '<span class="sql-kw">' + text + "</span>";
+        } else if (src.slice(last).match(/^\s*\(/)) {
+          out += '<span class="sql-fn">' + text + "</span>";
+        } else {
+          out += text;
+        }
+      } else {
+        out += '<span class="sql-op">' + text + "</span>";
+      }
+    }
+    return out + escapeHTML(src.slice(last));
+  }
+
+  function syncHighlightScroll() {
+    var ta = document.getElementById("sql-input");
+    var layer = document.getElementById("sql-highlight");
+    if (!ta || !layer) return;
+    layer.scrollTop = ta.scrollTop;
+    layer.scrollLeft = ta.scrollLeft;
+  }
+
+  function refreshHighlight() {
+    var ta = document.getElementById("sql-input");
+    var layer = document.getElementById("sql-highlight");
+    if (!ta || !layer) return;
+    // Trailing newline keeps the layer's height in step with the textarea
+    // when the caret sits on a fresh last line.
+    layer.innerHTML = highlightSQL(ta.value) + "\n";
+    syncHighlightScroll();
+  }
 
   // --- SQL editor: line-number gutter, connection chips, copy rows ---------
   function refreshGutter() {
@@ -266,11 +352,16 @@
     if (ta) {
       ta.addEventListener("input", function () {
         refreshGutter();
+        refreshHighlight();
         var tab = document.getElementById("editor-tab");
         if (tab) tab.classList.add("is-dirty");
       });
-      ta.addEventListener("scroll", refreshGutter);
+      ta.addEventListener("scroll", function () {
+        refreshGutter();
+        syncHighlightScroll();
+      });
       refreshGutter();
+      refreshHighlight();
     }
     var sel = document.getElementById("connection-select");
     if (sel) {

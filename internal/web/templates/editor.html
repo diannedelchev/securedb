@@ -121,8 +121,11 @@
 
         <div class="sqled-editor">
           <div class="sqled-gutter" id="sql-gutter">1</div>
-          <textarea name="sql" id="sql-input" spellcheck="false"
-                    placeholder="-- Write SQL here. ⌘⏎ / Ctrl+Enter to run.">{{.InitialSQL}}</textarea>
+          <div class="sqled-code">
+            <pre class="sqled-highlight" id="sql-highlight" aria-hidden="true"></pre>
+            <textarea name="sql" id="sql-input" spellcheck="false"
+                      placeholder="-- Write SQL here. ⌘⏎ / Ctrl+Enter to run.">{{.InitialSQL}}</textarea>
+          </div>
         </div>
       </form>
 
