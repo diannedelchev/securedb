@@ -410,6 +410,22 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--a
 .btn-tool:hover { background: var(--bg-hover); }
 .btn-tool.muted { border-color: #1C2536; color: var(--text-faint); }
 .sqled-toolbar .divider { width: 1px; height: 18px; background: var(--border-mid); margin: 0 4px; }
+
+/* Export format menu — anchored under its trigger in the toolbar. */
+.export-wrap { position: relative; display: flex; }
+.export-menu {
+  display: none; position: absolute; top: calc(100% + 6px); left: 0; z-index: 40;
+  min-width: 156px; padding: 4px; border-radius: 8px;
+  border: 1px solid var(--border-strong); background: var(--bg-elevated);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+}
+.export-menu.open { display: block; }
+.export-menu button {
+  display: block; width: 100%; text-align: left; padding: 7px 10px;
+  border: none; border-radius: 5px; background: none; cursor: pointer;
+  color: var(--text-2); font-size: 12px; font-family: var(--sans);
+}
+.export-menu button:hover { background: var(--bg-hover); color: var(--text); }
 .icon-btn { background: none; border: none; padding: 4px; cursor: pointer; color: var(--text-dim); display: flex; }
 .icon-btn:hover { color: var(--text); }
 .limit-chip {

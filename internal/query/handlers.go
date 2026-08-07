@@ -1,6 +1,8 @@
 package query
 
 import (
+	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/gofiber/fiber/v3"
@@ -84,6 +86,70 @@ func (h *Handlers) Cancel(c fiber.Ctx) error {
 		return view.Toast(c, "info", "Cancellation requested")
 	}
 	return view.Toast(c, "warning", "No running query with that ID")
+}
+
+// Export records that result rows left the gateway. The file itself is built
+// in the browser from the grid the user was already shown — that keeps the
+// export byte-identical to the masked view and avoids re-running the query
+// against the target database — so this endpoint exists purely to put the
+// event in the audit trail.
+func (h *Handlers) Export(c fiber.Ctx) error {
+	user := auth.CurrentUser(c)
+
+	format := strings.ToLower(strings.TrimSpace(c.FormValue("format")))
+	if format != "csv" && format != "json" {
+		format = "csv"
+	}
+	rows := clampCount(c.FormValue("rows"))
+	cols := clampCount(c.FormValue("columns"))
+	masked := clampCount(c.FormValue("masked"))
+
+	summary := fmt.Sprintf("%s export · %d row%s × %d column%s",
+		strings.ToUpper(format), rows, plural(rows), cols, plural(cols))
+	if masked > 0 {
+		summary += fmt.Sprintf(" · %d masked", masked)
+	}
+	// Recording the originating SQL is what makes the entry useful to an
+	// auditor: it identifies exactly which data was taken.
+	if sql := strings.TrimSpace(c.FormValue("sql")); sql != "" {
+		summary += "\n" + truncateText(sql, 4000)
+	}
+
+	h.Audit.Log(c.Context(), audit.Entry{
+		UserID:       user.ID,
+		Action:       audit.ActionExportRequested,
+		EntityType:   "query",
+		ConnectionID: strings.TrimSpace(c.FormValue("connection_id")),
+		QueryText:    summary,
+		Status:       "success",
+		IP:           c.IP(),
+		UserAgent:    c.Get("User-Agent"),
+	})
+	return c.SendStatus(fiber.StatusNoContent)
+}
+
+// clampCount parses a client-supplied count defensively — it is only ever used
+// for the audit description, so anything out of range collapses to 0.
+func clampCount(s string) int {
+	n, err := strconv.Atoi(strings.TrimSpace(s))
+	if err != nil || n < 0 || n > 10_000_000 {
+		return 0
+	}
+	return n
+}
+
+func plural(n int) string {
+	if n == 1 {
+		return ""
+	}
+	return "s"
+}
+
+func truncateText(s string, max int) string {
+	if len(s) <= max {
+		return s
+	}
+	return s[:max] + " …(truncated)"
 }
 
 // HistoryPage lists past queries. Auditors and admins see everyone's history.

@@ -104,47 +104,86 @@
     return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
   }
 
+  // One token stream feeds both the highlighter and the formatter, so the two
+  // can never disagree about where a string or comment starts. Dollar-quoted
+  // bodies ($$...$$) are matched whole — their contents are opaque and must
+  // survive formatting untouched.
   var SQL_TOKEN_RE = new RegExp(
     "(\\/\\*[\\s\\S]*?(?:\\*\\/|$))" +          // 1 block comment
     "|(--[^\\n]*|#[^\\n]*)" +                    // 2 line comment
-    "|('(?:[^']|'')*'?)" +                       // 3 string ('' escapes)
-    "|(\"(?:[^\"]|\"\")*\"?|`[^`\\n]*`?)" +      // 4 quoted identifier
-    "|(\\b0x[0-9a-fA-F]+\\b|\\b\\d+(?:\\.\\d+)?(?:[eE][+-]?\\d+)?\\b)" + // 5 number
-    "|([A-Za-z_][A-Za-z0-9_$]*)" +               // 6 word
-    "|(::|[+\\-*/%<>=!|&~^@#]+)",                // 7 operator
+    "|(\\$([A-Za-z_]\\w*)?\\$[\\s\\S]*?\\$\\3\\$)" + // 3 dollar-quoted string (4 = tag)
+    "|('(?:[^']|'')*'?)" +                       // 5 string ('' escapes)
+    "|(\"(?:[^\"]|\"\")*\"?|`[^`\\n]*`?)" +      // 6 quoted identifier
+    "|(\\b0x[0-9a-fA-F]+\\b|\\b\\d+(?:\\.\\d+)?(?:[eE][+-]?\\d+)?\\b)" + // 7 number
+    "|([A-Za-z_][A-Za-z0-9_$]*)" +               // 8 word
+    "|([(),;.])" +                               // 9 punctuation
+    "|(::|[+\\-*/%<>=!|&~^@#]+)" +               // 10 operator
+    "|(\\s+)",                                   // 11 whitespace
     "g"
   );
 
-  function highlightSQL(src) {
-    var out = "";
+  // Returns [{t, v}] where t is one of: com str ident num word punct op ws other.
+  // Concatenating every .v reproduces the input exactly.
+  function tokenizeSQL(src) {
+    var toks = [];
     var last = 0;
     var m;
     SQL_TOKEN_RE.lastIndex = 0;
     while ((m = SQL_TOKEN_RE.exec(src)) !== null) {
-      out += escapeHTML(src.slice(last, m.index));
+      if (m.index > last) toks.push({ t: "other", v: src.slice(last, m.index) });
       last = SQL_TOKEN_RE.lastIndex;
-      var text = escapeHTML(m[0]);
-      if (m[1] || m[2]) {
+      var t = m[1] || m[2] ? "com"
+        : m[3] ? "str"
+        : m[5] ? "str"
+        : m[6] ? "ident"
+        : m[7] ? "num"
+        : m[8] ? "word"
+        : m[9] ? "punct"
+        : m[10] ? "op"
+        : "ws";
+      // A line comment swallows everything to the newline; the formatter needs
+      // to know so it never joins code onto that line.
+      toks.push({ t: t, v: m[0], line: !!m[2] });
+    }
+    if (last < src.length) toks.push({ t: "other", v: src.slice(last) });
+    return toks;
+  }
+
+  function highlightSQL(src) {
+    var toks = tokenizeSQL(src);
+    var out = "";
+    for (var i = 0; i < toks.length; i++) {
+      var tok = toks[i];
+      var text = escapeHTML(tok.v);
+      if (tok.t === "com") {
         out += '<span class="sql-com">' + text + "</span>";
-      } else if (m[3]) {
+      } else if (tok.t === "str") {
         out += '<span class="sql-str">' + text + "</span>";
-      } else if (m[4]) {
-        out += text; // quoted identifiers keep the base color
-      } else if (m[5]) {
+      } else if (tok.t === "num") {
         out += '<span class="sql-num">' + text + "</span>";
-      } else if (m[6]) {
-        if (SQL_KEYWORDS.has(m[0].toLowerCase())) {
+      } else if (tok.t === "word") {
+        if (SQL_KEYWORDS.has(tok.v.toLowerCase())) {
           out += '<span class="sql-kw">' + text + "</span>";
-        } else if (src.slice(last).match(/^\s*\(/)) {
+        } else if (nextCode(toks, i) === "(") {
           out += '<span class="sql-fn">' + text + "</span>";
         } else {
           out += text;
         }
-      } else {
+      } else if (tok.t === "op") {
         out += '<span class="sql-op">' + text + "</span>";
+      } else {
+        out += text; // quoted identifiers, punctuation and whitespace stay plain
       }
     }
-    return out + escapeHTML(src.slice(last));
+    return out;
+  }
+
+  // First non-whitespace, non-comment token value after index i ("" at end).
+  function nextCode(toks, i) {
+    for (var j = i + 1; j < toks.length; j++) {
+      if (toks[j].t !== "ws" && toks[j].t !== "com") return toks[j].v;
+    }
+    return "";
   }
 
   function syncHighlightScroll() {
@@ -164,6 +203,207 @@
     layer.innerHTML = highlightSQL(ta.value) + "\n";
     syncHighlightScroll();
   }
+
+  // --- SQL editor: formatter ------------------------------------------------
+  // Clause keywords that begin a new line at the current nesting depth.
+  var FMT_MAJOR = new Set((
+    "select from where having limit offset values set returning union intersect " +
+    "except join insert update delete with window group order fetch " +
+    "left right inner full cross natural"
+  ).split(" "));
+  // Words that bind to a following major keyword, so it stays on the same line
+  // ("LEFT JOIN", "DELETE FROM", "GROUP BY", "UNION ALL", "INSERT INTO").
+  var FMT_BINDS_NEXT = new Set(
+    "left right inner outer full cross natural lateral delete insert union except intersect with".split(" ")
+  );
+  // Indented continuation keywords inside a clause.
+  var FMT_INDENT_KW = new Set("and or on".split(" "));
+
+  function fmtIndent(n) {
+    var s = "";
+    for (var i = 0; i < n; i++) s += "  ";
+    return s;
+  }
+
+  // Reflows SQL onto clause-per-line with two-space nesting. Strings, comments
+  // and dollar-quoted bodies pass through byte-for-byte; only whitespace between
+  // tokens and the case of recognised keywords change.
+  function formatSQL(src) {
+    var toks = tokenizeSQL(src).filter(function (t) { return t.t !== "ws"; });
+    var out = "";
+    var depth = 0;
+    var atLineStart = true;
+    var noSpace = false;   // suppress the space before the next token
+    var curExtra = 0;      // indent offset of the line being built
+    // For each open paren, whether it wraps a subquery (gets its own lines).
+    var parenStack = [];
+    var prevWord = "";
+    var prevType = "";
+
+    function newline(extra) {
+      extra = extra || 0;
+      out = out.replace(/[ \t]+$/, "");
+      if (atLineStart) {
+        // Already on a fresh line — just correct its indent, never blank-pad.
+        out = out.replace(/[^\n]*$/, fmtIndent(depth + extra));
+      } else {
+        out += "\n" + fmtIndent(depth + extra);
+      }
+      atLineStart = true;
+      noSpace = false;
+      curExtra = extra;
+    }
+    function write(text) {
+      if (!atLineStart && !noSpace && out !== "" && !/\s$/.test(out)) out += " ";
+      out += text;
+      atLineStart = false;
+      noSpace = false;
+    }
+    // Append with no separating space (qualifiers, casts, call parens).
+    function writeTight(text) {
+      out = out.replace(/[ \t]+$/, "");
+      out += text;
+      atLineStart = false;
+      noSpace = false;
+    }
+
+    for (var i = 0; i < toks.length; i++) {
+      var tok = toks[i];
+      var v = tok.v;
+      var lower = v.toLowerCase();
+
+      if (tok.t === "com") {
+        if (!atLineStart) out += " ";
+        out += v;
+        atLineStart = false;
+        // Anything after a line comment would be commented out; force a break
+        // that keeps the indent of the clause we were building.
+        if (tok.line) newline(curExtra);
+        prevType = "com";
+        continue;
+      }
+
+      if (tok.t === "punct") {
+        if (v === ".") {
+          writeTight(".");
+          noSpace = true;      // t.col stays glued on both sides
+        } else if (v === "(") {
+          // `count(` is a call; `IN (` and `VALUES (` keep their space.
+          var isCall = (prevType === "word" && !SQL_KEYWORDS.has(prevWord)) || prevType === "ident";
+          var sub = nextCode(toks, i).toLowerCase() === "select";
+          parenStack.push(sub);
+          if (isCall) writeTight("("); else write("(");
+          if (sub) {
+            depth++;
+            newline();
+          } else {
+            noSpace = true;    // no gap after the paren
+          }
+        } else if (v === ")") {
+          var wasSub = parenStack.pop();
+          if (wasSub) {
+            depth = Math.max(0, depth - 1);
+            newline();
+          }
+          writeTight(")");
+        } else if (v === ",") {
+          writeTight(",");
+          // Break the select/insert list only at the statement's own level;
+          // inside a function call the arguments stay inline.
+          if (parenStack.length === 0) newline(1);
+        } else { // ;
+          writeTight(";");
+          depth = 0;
+          parenStack = [];
+          newline();
+          out += "\n" + fmtIndent(0); // blank line between statements
+          atLineStart = true;
+        }
+        prevWord = "";
+        prevType = "punct";
+        continue;
+      }
+
+      if (tok.t === "word") {
+        var isKw = SQL_KEYWORDS.has(lower);
+        var text = isKw ? v.toUpperCase() : v;
+        if (FMT_MAJOR.has(lower) && !FMT_BINDS_NEXT.has(prevWord) && out !== "") {
+          newline();
+        } else if (FMT_INDENT_KW.has(lower) && out !== "") {
+          newline(1);
+        }
+        write(text);
+        prevWord = lower;
+        prevType = "word";
+        continue;
+      }
+
+      if (tok.t === "op" && (v === "::" || v === ".")) {
+        writeTight(v);
+        noSpace = true;
+        prevWord = "";
+        prevType = "op";
+        continue;
+      }
+
+      write(v);
+      prevWord = "";
+      prevType = tok.t;
+    }
+
+    return out.split("\n").map(function (l) {
+      return l.replace(/\s+$/, "");
+    }).join("\n").replace(/\n{3,}/g, "\n\n").trim();
+  }
+
+  // Formatting must never alter the statement. Compare the meaningful token
+  // streams before and after; if they differ in any way the reflow is unsafe
+  // and gets discarded rather than handed back to the user.
+  function formatIsLossless(before, after) {
+    function sig(s) {
+      return tokenizeSQL(s)
+        .filter(function (t) { return t.t !== "ws"; })
+        .map(function (t) {
+          // Keyword case is intentionally changed; nothing else may differ.
+          return t.t === "word" ? t.t + ":" + t.v.toLowerCase() : t.t + ":" + t.v;
+        })
+        .join(" ");
+    }
+    return sig(before) === sig(after);
+  }
+
+  window.formatEditorSQL = function () {
+    var ta = document.getElementById("sql-input");
+    if (!ta) return;
+    var src = ta.value;
+    if (!src.trim()) {
+      window.toast("info", "Nothing to format");
+      return;
+    }
+    var formatted;
+    try {
+      formatted = formatSQL(src);
+    } catch (e) {
+      window.toast("error", "Could not format this SQL");
+      return;
+    }
+    if (!formatIsLossless(src, formatted)) {
+      window.toast("error", "Formatting skipped — it would have altered this SQL");
+      return;
+    }
+    if (formatted === src) {
+      window.toast("info", "Already formatted");
+      return;
+    }
+    var top = ta.scrollTop;
+    ta.value = formatted;
+    ta.scrollTop = top;
+    refreshGutter();
+    refreshHighlight();
+    var tab = document.getElementById("editor-tab");
+    if (tab) tab.classList.add("is-dirty");
+    window.toast("success", "SQL formatted");
+  };
 
   // --- SQL editor: line-number gutter, connection chips, copy rows ---------
   function refreshGutter() {
@@ -227,6 +467,176 @@
       window.toast("error", "Clipboard unavailable");
     });
   };
+
+  // --- Result export --------------------------------------------------------
+  // Exports are built from the rendered grid rather than by re-running the
+  // query: that keeps the file identical to what the user was shown, preserves
+  // server-side column masking, and avoids a second hit on the target database.
+
+  // Header text without the "masked" badge — take only direct text nodes.
+  function headerName(th) {
+    var s = "";
+    for (var i = 0; i < th.childNodes.length; i++) {
+      var n = th.childNodes[i];
+      if (n.nodeType === 3) s += n.nodeValue;
+    }
+    return s.trim();
+  }
+
+  function readResultGrid() {
+    var table = document.querySelector("#query-result .rg-table");
+    if (!table) return null;
+    var headCells = table.querySelectorAll("thead th");
+    var columns = [];
+    var masked = [];
+    for (var i = 1; i < headCells.length; i++) { // 0 is the row-number column
+      columns.push(headerName(headCells[i]));
+      masked.push(!!headCells[i].querySelector(".badge-masked"));
+    }
+    if (!columns.length) return null;
+    var rows = [];
+    table.querySelectorAll("tbody tr").forEach(function (tr) {
+      var cells = tr.querySelectorAll("td");
+      var row = [];
+      for (var j = 1; j < cells.length; j++) {
+        row.push({
+          v: cells[j].textContent,
+          isNull: cells[j].classList.contains("null")
+        });
+      }
+      rows.push(row);
+    });
+    return { columns: columns, rows: rows, masked: masked };
+  }
+
+  // RFC 4180: quote when the value contains a delimiter, quote or newline;
+  // literal quotes are doubled. A NULL becomes an empty unquoted field, which
+  // is what distinguishes it from the empty string ("").
+  function csvField(cell) {
+    if (cell.isNull) return "";
+    var v = cell.v;
+    if (/[",\r\n]/.test(v)) return '"' + v.replace(/"/g, '""') + '"';
+    return v;
+  }
+
+  function gridToCSV(grid) {
+    var lines = [grid.columns.map(function (c) {
+      return csvField({ v: c, isNull: false });
+    }).join(",")];
+    grid.rows.forEach(function (row) {
+      lines.push(row.map(csvField).join(","));
+    });
+    return lines.join("\r\n");
+  }
+
+  function gridToJSON(grid) {
+    // Duplicate column labels would collide as object keys, so disambiguate.
+    var keys = [];
+    var seen = {};
+    grid.columns.forEach(function (c) {
+      var k = c || "column";
+      if (Object.prototype.hasOwnProperty.call(seen, k)) {
+        seen[k]++;
+        k = k + "_" + seen[k];
+      } else {
+        seen[k] = 1;
+      }
+      keys.push(k);
+    });
+    var out = grid.rows.map(function (row) {
+      var o = {};
+      row.forEach(function (cell, i) {
+        o[keys[i]] = cell.isNull ? null : cell.v;
+      });
+      return o;
+    });
+    return JSON.stringify(out, null, 2);
+  }
+
+  function exportStamp() {
+    var d = new Date();
+    function p(n) { return (n < 10 ? "0" : "") + n; }
+    return d.getFullYear() + p(d.getMonth() + 1) + p(d.getDate()) +
+      "-" + p(d.getHours()) + p(d.getMinutes()) + p(d.getSeconds());
+  }
+
+  function downloadFile(name, mime, text) {
+    var blob = new Blob([text], { type: mime + ";charset=utf-8" });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement("a");
+    a.href = url;
+    a.download = name;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    // Revoke on the next tick so the download has taken the reference.
+    setTimeout(function () { URL.revokeObjectURL(url); }, 0);
+  }
+
+  // Exporting data out of the gateway is an audited event; the server records
+  // it against the session. Failure to log must not lose the user's file, so
+  // this is fire-and-forget after the download has already started.
+  function recordExport(format, grid) {
+    var body = new URLSearchParams();
+    body.set("_csrf", csrfToken());
+    body.set("format", format);
+    body.set("rows", String(grid.rows.length));
+    body.set("columns", String(grid.columns.length));
+    body.set("masked", String(grid.masked.filter(Boolean).length));
+    var ta = document.getElementById("sql-input");
+    if (ta) body.set("sql", ta.value);
+    var conn = document.getElementById("connection-select");
+    if (conn) body.set("connection_id", conn.value);
+    fetch("/query/export", { method: "POST", body: body }).catch(function () {});
+  }
+
+  window.exportResults = function (format) {
+    closeExportMenus();
+    var grid = readResultGrid();
+    if (!grid) {
+      window.toast("info", "No result grid to export");
+      return;
+    }
+    if (!grid.rows.length) {
+      window.toast("info", "Nothing to export — the query returned no rows");
+      return;
+    }
+    var stamp = exportStamp();
+    if (format === "json") {
+      downloadFile("securedb-export-" + stamp + ".json", "application/json", gridToJSON(grid));
+    } else {
+      format = "csv";
+      downloadFile("securedb-export-" + stamp + ".csv", "text/csv", gridToCSV(grid));
+    }
+    recordExport(format, grid);
+    var maskedCount = grid.masked.filter(Boolean).length;
+    window.toast("success", grid.rows.length + " row" + (grid.rows.length === 1 ? "" : "s") +
+      " exported as " + format.toUpperCase() +
+      (maskedCount ? " · " + maskedCount + " column" + (maskedCount === 1 ? "" : "s") +
+        " stayed masked" : ""));
+  };
+
+  function closeExportMenus() {
+    document.querySelectorAll(".export-menu.open").forEach(function (m) {
+      m.classList.remove("open");
+    });
+  }
+
+  window.toggleExportMenu = function (btn) {
+    var menu = btn.parentNode.querySelector(".export-menu");
+    if (!menu) return;
+    var wasOpen = menu.classList.contains("open");
+    closeExportMenus();
+    if (!wasOpen) menu.classList.add("open");
+  };
+
+  // Any click outside an export menu dismisses it.
+  document.addEventListener("click", function (e) {
+    if (!e.target.closest || !e.target.closest(".export-wrap")) closeExportMenus();
+  });
+  document.addEventListener("keydown", function (e) {
+    if (e.key === "Escape") closeExportMenus();
+  });
 
   // --- SQL editor: resizable panes (persisted on the user profile) ---------
   // Bounds mirror the server-side clamps in users.SaveEditorLayout.
@@ -359,6 +769,13 @@
       ta.addEventListener("scroll", function () {
         refreshGutter();
         syncHighlightScroll();
+      });
+      // Shift+Alt+F — the conventional "format document" chord.
+      ta.addEventListener("keydown", function (e) {
+        if (e.shiftKey && e.altKey && (e.key === "F" || e.key === "f")) {
+          e.preventDefault();
+          window.formatEditorSQL();
+        }
       });
       refreshGutter();
       refreshHighlight();

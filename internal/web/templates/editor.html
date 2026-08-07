@@ -101,15 +101,21 @@
           <button class="icon-btn" type="button" title="Save query" onclick="openModal('save-modal')">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 21V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v16l-6-4z"></path></svg>
           </button>
-          <button class="icon-btn" type="button" title="Format SQL" onclick="toast('info','SQL formatting is coming soon')">
+          <button class="icon-btn" type="button" title="Format SQL (Shift+Alt+F)" onclick="formatEditorSQL()">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M4 12h10M4 17h13"></path></svg>
           </button>
           <a class="icon-btn" href="/history" title="Query history">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a9 9 0 1 1-9 9M3 12l2-2M3 12l-2-2M12 7v5l3 2"></path></svg>
           </a>
-          <button class="icon-btn" type="button" title="Export results" onclick="toast('info','Result export is coming soon')">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12M7 10l5 5 5-5M4 21h16"></path></svg>
-          </button>
+          <span class="export-wrap">
+            <button class="icon-btn" type="button" title="Export results" onclick="toggleExportMenu(this)">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12M7 10l5 5 5-5M4 21h16"></path></svg>
+            </button>
+            <div class="export-menu" role="menu">
+              <button type="button" role="menuitem" onclick="exportResults('csv')">Export as CSV</button>
+              <button type="button" role="menuitem" onclick="exportResults('json')">Export as JSON</button>
+            </div>
+          </span>
           <div style="flex:1"></div>
           <span id="exec-indicator" class="htmx-indicator"><span class="spinner"></span></span>
           <div class="limit-chip" id="limit-chip" title="Row limit enforced by the environment security policy"

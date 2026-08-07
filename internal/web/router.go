@@ -99,6 +99,7 @@ func Register(app *fiber.App, d Deps) {
 	app.Get("/editor", d.Query.EditorPage)
 	app.Post("/query/execute", d.Query.Execute)
 	app.Post("/query/cancel", d.Query.Cancel)
+	app.Post("/query/export", d.Query.Export)
 	app.Post("/query/save", d.Query.SaveQuery)
 	app.Delete("/query/saved/:id", d.Query.DeleteSavedQuery)
 	app.Get("/history", d.Query.HistoryPage)
