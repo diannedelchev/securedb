@@ -105,7 +105,7 @@ func (h *Handlers) securityStats(ctx context.Context, pols []Policy, rules []Mas
 			}
 		}
 	}
-	if s.MaskingRules >= 8 {
+	if s.MaskingRules >= len(DefaultMaskingRules()) {
 		score += 10
 	}
 	if s.NoSSLConns == 0 {

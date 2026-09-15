@@ -1,5 +1,5 @@
 -- Demo data for the sample PostgreSQL target. Includes sensitive columns to
--- exercise the masking rules (email, phone, card, iban, egn).
+-- exercise the masking rules (card, iban, egn); email/phone stay visible.
 CREATE SCHEMA IF NOT EXISTS app;
 
 CREATE TABLE app.customers (

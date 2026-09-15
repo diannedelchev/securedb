@@ -94,8 +94,7 @@ Create further users on **Users & Roles**. Setting `seed.demo_data: true` in
 Seeded connections point at the bundled sample targets:
 
 - **Demo PostgreSQL** — `target-postgres/demodb` (schema `app`: customers,
-  payments, api_credentials — includes email/phone/card/iban/egn columns to
-  demo masking)
+  payments, api_credentials — includes card/iban/egn columns to demo masking)
 - **Demo MySQL** — `target-mysql/demodb` (customers, orders)
 - **Prod PostgreSQL (demo)** — same target labelled *production* so you can
   walk the approval flow
@@ -108,7 +107,7 @@ Seeded connections point at the bundled sample targets:
 ### Try the guardrails
 
 ```sql
--- masking: emails, phones, cards come back masked
+-- masking: cards, IBANs and EGNs come back masked (emails/phones do not)
 SELECT * FROM app.customers;
 SELECT * FROM app.payments;
 
@@ -152,7 +151,7 @@ the requester's account with the one-time **Run approved query** button.
 | Connectors | `internal/connectors` | `DBConnector` interface; Postgres + MySQL implemented, MSSQL stub |
 | Query pipeline | `internal/query` | policy check → block/approve → execute (timeout + row cap, cancellable) → mask → history + audit |
 | Policy engine | `internal/policies` | per-environment max rows/timeout/blocked keywords/write rules; fails closed on unknown statements; risk scoring |
-| Data masking | `internal/policies/masking.go` | column-pattern rules: email, phone, card/pan, iban, password/token/secret, national_id/egn |
+| Data masking | `internal/policies/masking.go` | column-pattern rules: card/pan, iban, password/secret, national_id/egn; email, phone and `*token*` columns are never masked |
 | Approvals | `internal/approvals` | pending/approved/rejected/expired, four-eyes (no self-approval), one-time execution, 24 h expiry |
 | Audit | `internal/audit` | every security-sensitive action with user, IP, user agent, query text, severity |
 | Dashboard | `internal/dashboard` | live stats and feeds for the operational grid |

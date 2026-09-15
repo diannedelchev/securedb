@@ -57,20 +57,22 @@ func TestMaskRedactAndNull(t *testing.T) {
 func TestRuleForColumn(t *testing.T) {
 	rules := activeRules()
 	cases := map[string]bool{
-		"email":          true,
-		"user_email":     true,
-		"EMAIL_ADDRESS":  true,
-		"phone_number":   true,
-		"card_number":    true,
-		"password_hash":  true,
-		"api_token":      true,
-		"client_secret":  true,
-		"national_id":    true,
-		"egn":            true,
-		"iban_code":      true,
-		"first_name":     false,
-		"amount":         false,
-		"id":             false,
+		"card_number":   true,
+		"password_hash": true,
+		"client_secret": true,
+		"national_id":   true,
+		"egn":           true,
+		"iban_code":     true,
+		"first_name":    false,
+		"amount":        false,
+		"id":            false,
+		// Token columns are surrogates and must never be masked, even when
+		// another pattern (card, pan, secret) also matches the name.
+		"api_token":    false,
+		"card_token":   false,
+		"pan_token":    false,
+		"secret_token": false,
+		"TOKEN":        false,
 	}
 	for col, want := range cases {
 		got := RuleForColumn(rules, col) != nil
@@ -80,34 +82,56 @@ func TestRuleForColumn(t *testing.T) {
 	}
 }
 
+func TestApplyMaskingLeavesTokenColumnsUnmasked(t *testing.T) {
+	rules := activeRules()
+	cols := []string{"id", "api_token", "card_token", "client_secret"}
+	rows := [][]string{{"1", "tok_live_9f8e7d6c5b4a", "tok_card_4111", "cs_live_1a2b3c4d5e6f"}}
+	masked := ApplyMasking(rules, cols, rows)
+	if _, ok := masked[1]; ok {
+		t.Error("api_token must not be masked")
+	}
+	if _, ok := masked[2]; ok {
+		t.Error("card_token must not be masked")
+	}
+	if rows[0][1] != "tok_live_9f8e7d6c5b4a" || rows[0][2] != "tok_card_4111" {
+		t.Errorf("token values altered: %q %q", rows[0][1], rows[0][2])
+	}
+	if rows[0][3] != "********" {
+		t.Errorf("client_secret should still be redacted, got %q", rows[0][3])
+	}
+}
+
 func TestApplyMasking(t *testing.T) {
 	rules := activeRules()
-	cols := []string{"id", "email", "phone", "card_number", "name"}
+	cols := []string{"id", "email", "phone", "card_number", "iban", "name"}
 	rows := [][]string{
-		{"1", "john@domain.com", "+359881234123", "4111111111111234", "John"},
-		{"2", "NULL", "NULL", "NULL", "Jane"},
+		{"1", "john@domain.com", "+359881234123", "4111111111111234", "BG80BNBG96611020345678", "John"},
+		{"2", "NULL", "NULL", "NULL", "NULL", "Jane"},
 	}
 	masked := ApplyMasking(rules, cols, rows)
-	if len(masked) != 3 {
-		t.Fatalf("expected 3 masked columns, got %d", len(masked))
+	if len(masked) != 2 {
+		t.Fatalf("expected 2 masked columns (card, iban), got %d", len(masked))
 	}
-	if rows[0][1] != "jo***@domain.com" {
-		t.Errorf("email not masked: %q", rows[0][1])
+	if rows[0][1] != "john@domain.com" || rows[0][2] != "+359881234123" {
+		t.Errorf("email/phone must not be masked: %q %q", rows[0][1], rows[0][2])
 	}
 	if rows[0][3] != "**** **** **** 1234" {
 		t.Errorf("card not masked: %q", rows[0][3])
 	}
-	if rows[0][4] != "John" || rows[0][0] != "1" {
+	if rows[0][4] != "BG8*****************78" {
+		t.Errorf("iban not masked: %q", rows[0][4])
+	}
+	if rows[0][5] != "John" || rows[0][0] != "1" {
 		t.Error("non-sensitive columns must be untouched")
 	}
-	if rows[1][1] != "NULL" {
+	if rows[1][3] != "NULL" {
 		t.Error("NULL values must pass through")
 	}
 	// Inactive rules must not match.
 	for i := range rules {
 		rules[i].IsActive = false
 	}
-	if RuleForColumn(rules, "email") != nil {
+	if RuleForColumn(rules, "card_number") != nil {
 		t.Error("inactive rule must not match")
 	}
 }

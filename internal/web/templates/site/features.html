@@ -99,12 +99,11 @@
         <div class="spec-card-sub">Column-pattern matched, applied before results leave the server.</div>
         <table class="spec-table">
           <tr><th>DATA TYPE</th><th>EXAMPLE OUTPUT</th></tr>
-          <tr><td>Email addresses</td><td><code>m•••@a•••.de</code></td></tr>
-          <tr><td>Phone numbers</td><td><code>+49 ••• ••• 82</code></td></tr>
           <tr><td>Cards / PANs</td><td><code>•••• •••• •••• 4242</code></td></tr>
           <tr><td>IBANs</td><td><code>DE•• •••• •••• 7712</code></td></tr>
           <tr><td>National IDs</td><td><code>••••••••92</code></td></tr>
-          <tr><td>Passwords, tokens, secrets</td><td><code>••••••••</code> (fully redacted)</td></tr>
+          <tr><td>Passwords, secrets</td><td><code>••••••••</code> (fully redacted)</td></tr>
+          <tr><td>Emails, phones, tokens (<code>*token*</code>)</td><td>never masked</td></tr>
         </table>
       </div>
     </div>

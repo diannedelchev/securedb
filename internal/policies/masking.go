@@ -12,26 +12,35 @@ type MaskingRule struct {
 	IsActive      bool
 }
 
-// DefaultMaskingRules seeds the standard sensitive-column patterns.
+// DefaultMaskingRules seeds the standard sensitive-column patterns. Email,
+// phone and token columns are intentionally not masked.
 func DefaultMaskingRules() []MaskingRule {
 	return []MaskingRule{
-		{ColumnPattern: "email", Strategy: "email", Description: "Email addresses"},
-		{ColumnPattern: "phone", Strategy: "phone", Description: "Phone numbers"},
 		{ColumnPattern: "iban", Strategy: "partial", Description: "IBAN account numbers"},
 		{ColumnPattern: "pan", Strategy: "card", Description: "Card primary account numbers"},
 		{ColumnPattern: "card", Strategy: "card", Description: "Card numbers"},
 		{ColumnPattern: "password", Strategy: "redact", Description: "Passwords"},
-		{ColumnPattern: "token", Strategy: "redact", Description: "API and auth tokens"},
 		{ColumnPattern: "secret", Strategy: "redact", Description: "Secrets"},
 		{ColumnPattern: "national_id", Strategy: "redact", Description: "National ID numbers"},
 		{ColumnPattern: "egn", Strategy: "redact", Description: "Bulgarian EGN"},
 	}
 }
 
+// exemptColumnPatterns are never masked, even when another rule's pattern
+// also matches the column name. Token columns (card_token, pan_token,
+// api_token, ...) hold non-sensitive surrogate values that operators need to
+// see in full, so they are exempt from all rules.
+var exemptColumnPatterns = []string{"token"}
+
 // RuleForColumn finds the first active rule whose pattern is contained in the
-// column name. Returns nil when the column is not sensitive.
+// column name. Returns nil when the column is not sensitive or is exempt.
 func RuleForColumn(rules []MaskingRule, column string) *MaskingRule {
 	col := strings.ToLower(column)
+	for _, ex := range exemptColumnPatterns {
+		if strings.Contains(col, ex) {
+			return nil
+		}
+	}
 	for i := range rules {
 		r := &rules[i]
 		if !r.IsActive {
