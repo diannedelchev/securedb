@@ -109,7 +109,7 @@
         <input type="hidden" name="_csrf" value="{{$csrf}}">
         <div class="form-row">
           <label class="field">
-            <span class="lbl">MAX ROWS</span>
+            <span class="lbl" title="Fallback row cap when the editor sends no LIMIT selection">DEFAULT MAX ROWS</span>
             <input type="number" name="max_rows" value="{{.MaxRows}}" min="1" max="100000" {{if not $canEdit}}disabled{{end}}>
           </label>
           <label class="field">

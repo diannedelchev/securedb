@@ -432,7 +432,13 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--a
   display: flex; align-items: center; gap: 6px; height: 28px; padding: 0 10px;
   border-radius: 6px; border: 1px solid var(--border-mid); background: #0F1420;
   font-size: 11px; color: var(--text-dim); font-family: var(--mono); white-space: nowrap;
+  cursor: pointer;
 }
+.limit-chip select {
+  background: transparent; border: none; padding: 0; margin: 0; height: auto;
+  font-size: 11px; font-weight: 600; color: var(--text); font-family: var(--mono); cursor: pointer;
+}
+.limit-chip select:focus { box-shadow: none; outline: none; }
 
 /* Code editor */
 .sqled-editor {

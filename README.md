@@ -133,7 +133,7 @@ the requester's account with the one-time **Run approved query** button.
 | **Public site** | Marketing homepage at `/` for anonymous visitors (signed-in users land on the Dashboard), plus `/features`, `/privacy` and `/terms` — served from the same binary in the same design system |
 | **Dashboard** | KPI cards, 24h query-volume histogram, slow queries, recent connections, environment status, pending access requests, activity timeline |
 | **Connections** | Card grid with env/read-only/tag chips, last-used, test/edit/connect; wizard-style create/edit form with selectable auth methods. **One connection covers every database on the server** — it stores a default database, and the editor/explorer can switch to any other database the credentials can reach (PostgreSQL via `pg_database`, MySQL via schemas) |
-| **SQL Editor** | Full-bleed IDE: schema tree, tabs, Run ⌘⏎ / Explain / Stop, policy-driven LIMIT + READ-ONLY chips, line-numbered editor, result grid with masking badges, Copy rows, saved queries & history rail; production banner with approval-reason input |
+| **SQL Editor** | Full-bleed IDE: schema tree, tabs, Run ⌘⏎ / Explain / Stop, LIMIT selector (100 / 500 default / Unlimited) + READ-ONLY chip, line-numbered editor, result grid with masking badges, Copy rows, saved queries & history rail; production banner with approval-reason input |
 | **Database Explorer** | Three-pane: filterable object tree → tabbed Columns/Constraints/Indexes grid → inspector with object stats and your effective permissions |
 | **Query History** | Day-grouped timeline with risk badges, blocked-query callouts, expandable execution detail, replay & copy |
 | **Audit Logs** | Severity-coded event list with category pills, click-through detail panel (statement, actor, origin) — auditors/DBAs/admins only |
@@ -184,7 +184,9 @@ the requester's account with the one-time **Run approved query** button.
 
 ### Policy defaults
 
-- Max rows **500**, timeout **30 s** (editable per environment in Security Center)
+- Row limit chosen per run in the editor: **100**, **500** (default) or **Unlimited**; the
+  policy's max rows (**500**) is only the fallback when no selection is sent. Timeout **30 s**
+  (editable per environment in Security Center)
 - Blocked keywords for non-admins: `DROP, TRUNCATE, ALTER, CREATE, GRANT, REVOKE`
 - `DELETE`/`UPDATE` without `WHERE`: blocked for non-admins
 - Multi-statement requests: blocked for non-admins

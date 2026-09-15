@@ -34,12 +34,6 @@ func (h *Handlers) EditorPage(c fiber.Ctx) error {
 	}
 	history, _ := h.Svc.History(c.Context(), user.ID, false, 20)
 	saved, _ := h.Svc.SavedQueries(c.Context(), user.ID)
-	// Per-environment row limits feed the LIMIT chip in the toolbar.
-	limits := map[string]int{}
-	for _, env := range []string{"development", "staging", "production"} {
-		p, _ := h.Policies.ForEnvironment(c.Context(), env)
-		limits[env] = p.MaxRows
-	}
 	// Saved pane sizes from the user's profile; empty means defaults.
 	layout, _ := h.Users.GetPreference(c.Context(), user.ID, users.PrefEditorLayout)
 	return view.Render(c, "editor", fiber.Map{
@@ -48,7 +42,6 @@ func (h *Handlers) EditorPage(c fiber.Ctx) error {
 		"Connections":  conns,
 		"History":      history,
 		"Saved":        saved,
-		"Limits":       limits,
 		"SelectedID":   c.Query("connection"),
 		"InitialSQL":   c.Query("sql"),
 		"InitialDB":    c.Query("db"),
@@ -68,6 +61,7 @@ func (h *Handlers) Execute(c fiber.Ctx) error {
 		Reason:       strings.TrimSpace(c.FormValue("reason")),
 		ApprovalID:   strings.TrimSpace(c.FormValue("approval_id")),
 		RunID:        c.FormValue("run_id"),
+		RowLimit:     parseRowLimit(c.FormValue("row_limit")),
 		IP:           c.IP(),
 		UserAgent:    c.Get("User-Agent"),
 	})
@@ -126,6 +120,20 @@ func (h *Handlers) Export(c fiber.Ctx) error {
 		UserAgent:    c.Get("User-Agent"),
 	})
 	return c.SendStatus(fiber.StatusNoContent)
+}
+
+// parseRowLimit reads the editor's LIMIT selector. 0 means unlimited; a
+// missing or malformed value falls back to the environment policy default.
+func parseRowLimit(s string) int {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return RowLimitPolicyDefault
+	}
+	n, err := strconv.Atoi(s)
+	if err != nil || n < 0 || n > 10_000_000 {
+		return RowLimitPolicyDefault
+	}
+	return n
 }
 
 // clampCount parses a client-supplied count defensively — it is only ever used

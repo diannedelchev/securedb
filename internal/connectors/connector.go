@@ -24,7 +24,8 @@ type ConnectionConfig struct {
 }
 
 type QueryRequest struct {
-	SQL     string
+	SQL string
+	// MaxRows caps fetched rows; 0 or negative fetches every row.
 	MaxRows int
 	Timeout time.Duration
 	// IsWrite selects Exec vs Query semantics; decided by the policy engine's
@@ -139,16 +140,13 @@ func runQuery(ctx context.Context, db *sql.DB, req QueryRequest) (QueryResult, e
 	}
 	result := QueryResult{Columns: cols}
 	maxRows := req.MaxRows
-	if maxRows <= 0 {
-		maxRows = 500
-	}
 	raw := make([]any, len(cols))
 	ptrs := make([]any, len(cols))
 	for i := range raw {
 		ptrs[i] = &raw[i]
 	}
 	for rows.Next() {
-		if len(result.Rows) >= maxRows {
+		if maxRows > 0 && len(result.Rows) >= maxRows {
 			result.Truncated = true
 			break
 		}

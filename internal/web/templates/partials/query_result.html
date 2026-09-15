@@ -35,7 +35,7 @@
     {{if not $o.Result.Rows}}<div class="sqled-empty" style="min-height:100px">Query returned no rows.</div>{{end}}
   </div>
   <div class="sqled-foot">
-    <span class="rows-count">rows 1–{{len $o.Result.Rows}}{{if $o.Result.Truncated}} (more available — raise LIMIT via policy){{end}}</span>
+    <span class="rows-count">rows 1–{{len $o.Result.Rows}}{{if $o.Result.Truncated}} (more available — raise the LIMIT selector){{end}}</span>
     <div style="flex:1"></div>
     <button class="foot-action" type="button" onclick="copyResultRows(this)">
       <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 7h8M8 12h8M8 17h5M4 7h.01M4 12h.01M4 17h.01"></path></svg>Copy rows

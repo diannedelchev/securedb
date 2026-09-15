@@ -118,10 +118,14 @@
           </span>
           <div style="flex:1"></div>
           <span id="exec-indicator" class="htmx-indicator"><span class="spinner"></span></span>
-          <div class="limit-chip" id="limit-chip" title="Row limit enforced by the environment security policy"
-               data-limit-development="{{index .Limits "development"}}"
-               data-limit-staging="{{index .Limits "staging"}}"
-               data-limit-production="{{index .Limits "production"}}">LIMIT {{index .Limits "development"}}</div>
+          <label class="limit-chip" id="limit-chip" title="Maximum rows fetched per run">
+            LIMIT
+            <select name="row_limit" id="row-limit" aria-label="Row limit">
+              <option value="100">100</option>
+              <option value="500" selected>500</option>
+              <option value="0">Unlimited</option>
+            </select>
+          </label>
           <span class="chip-ro" id="ro-chip" style="display:none">READ-ONLY</span>
         </div>
 
