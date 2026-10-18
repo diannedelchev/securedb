@@ -5,9 +5,34 @@ on:
     branches: [main]
   pull_request:
 
+permissions:
+  contents: read
+
 jobs:
   go:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: securedb-test
+          POSTGRES_DB: securedb_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres -d securedb_test"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: securedb-test
+          MYSQL_DATABASE: securedb_test
+        ports: ["3306:3306"]
+        options: >-
+          --health-cmd "mysqladmin ping -h 127.0.0.1 -psecuredb-test"
+          --health-interval 5s --health-timeout 5s --health-retries 20
+    env:
+      SECUREDB_TEST_DATABASE_URL: postgres://postgres:securedb-test@127.0.0.1:5432/securedb_test?sslmode=disable
+      SECUREDB_TEST_MYSQL_DSN: root:securedb-test@tcp(127.0.0.1:3306)/securedb_test
     steps:
       - uses: actions/checkout@v4
 
@@ -21,11 +46,21 @@ jobs:
       - name: go vet
         run: go vet ./...
 
+      - name: Vulnerability check
+        run: go run golang.org/x/vuln/cmd/govulncheck@v1.8.0 ./...
+
       - name: Tests
-        run: go test ./...
+        run: go test -race ./...
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: JavaScript tests
+        run: node --test tests/*.test.cjs
 
       - name: Build
-        run: go build -o /dev/null ./cmd/server
+        run: CGO_ENABLED=0 go build -o /dev/null ./cmd/server
 
   docker:
     runs-on: ubuntu-latest

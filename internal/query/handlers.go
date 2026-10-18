@@ -82,43 +82,39 @@ func (h *Handlers) Cancel(c fiber.Ctx) error {
 	return view.Toast(c, "warning", "No running query with that ID")
 }
 
-// Export records that result rows left the gateway. The file itself is built
-// in the browser from the grid the user was already shown — that keeps the
-// export byte-identical to the masked view and avoids re-running the query
-// against the target database — so this endpoint exists purely to put the
-// event in the audit trail.
+// Export authorizes and records the supported download before the browser starts
+// it. The originating query/connection come from durable history, not form data.
 func (h *Handlers) Export(c fiber.Ctx) error {
 	user := auth.CurrentUser(c)
-
+	if !user.CanQuery() {
+		return fiber.NewError(fiber.StatusForbidden, "your roles do not allow exports")
+	}
+	id := strings.TrimSpace(c.FormValue("history_id"))
+	var connID, env, database, sql string
+	var rows int
+	err := h.Svc.pool.QueryRow(c.Context(), `SELECT c.id,c.environment,h.database_name,h.query_text,h.row_count
+		FROM query_history h JOIN database_connections c ON c.id=h.connection_id
+		WHERE h.id=$1 AND h.user_id=$2 AND h.status='success' AND c.is_active`, id, user.ID).Scan(&connID, &env, &database, &sql, &rows)
+	if err != nil {
+		return fiber.NewError(fiber.StatusForbidden, "result is not available for export")
+	}
+	policy, err := h.Policies.ForEnvironment(c.Context(), env)
+	if err != nil {
+		return fiber.NewError(fiber.StatusServiceUnavailable, "security policy unavailable")
+	}
+	if !policy.AllowExport {
+		return fiber.NewError(fiber.StatusForbidden, "export is disabled by policy")
+	}
 	format := strings.ToLower(strings.TrimSpace(c.FormValue("format")))
 	if format != "csv" && format != "json" {
-		format = "csv"
+		return fiber.NewError(fiber.StatusBadRequest, "invalid export format")
 	}
-	rows := clampCount(c.FormValue("rows"))
-	cols := clampCount(c.FormValue("columns"))
-	masked := clampCount(c.FormValue("masked"))
-
-	summary := fmt.Sprintf("%s export · %d row%s × %d column%s",
-		strings.ToUpper(format), rows, plural(rows), cols, plural(cols))
-	if masked > 0 {
-		summary += fmt.Sprintf(" · %d masked", masked)
+	if err := h.Audit.Log(c.Context(), audit.Entry{
+		UserID: user.ID, Action: audit.ActionExportRequested, EntityType: "query", EntityID: id,
+		ConnectionID: connID, QueryText: fmt.Sprintf("%s export · %d rows · database %s\n%s", strings.ToUpper(format), rows, database, sql), Status: "success", IP: c.IP(), UserAgent: c.Get("User-Agent"),
+	}); err != nil {
+		return fiber.NewError(fiber.StatusServiceUnavailable, "export audit unavailable")
 	}
-	// Recording the originating SQL is what makes the entry useful to an
-	// auditor: it identifies exactly which data was taken.
-	if sql := strings.TrimSpace(c.FormValue("sql")); sql != "" {
-		summary += "\n" + truncateText(sql, 4000)
-	}
-
-	h.Audit.Log(c.Context(), audit.Entry{
-		UserID:       user.ID,
-		Action:       audit.ActionExportRequested,
-		EntityType:   "query",
-		ConnectionID: strings.TrimSpace(c.FormValue("connection_id")),
-		QueryText:    summary,
-		Status:       "success",
-		IP:           c.IP(),
-		UserAgent:    c.Get("User-Agent"),
-	})
 	return c.SendStatus(fiber.StatusNoContent)
 }
 
@@ -134,30 +130,6 @@ func parseRowLimit(s string) int {
 		return RowLimitPolicyDefault
 	}
 	return n
-}
-
-// clampCount parses a client-supplied count defensively — it is only ever used
-// for the audit description, so anything out of range collapses to 0.
-func clampCount(s string) int {
-	n, err := strconv.Atoi(strings.TrimSpace(s))
-	if err != nil || n < 0 || n > 10_000_000 {
-		return 0
-	}
-	return n
-}
-
-func plural(n int) string {
-	if n == 1 {
-		return ""
-	}
-	return "s"
-}
-
-func truncateText(s string, max int) string {
-	if len(s) <= max {
-		return s
-	}
-	return s[:max] + " …(truncated)"
 }
 
 // Search powers the topbar global search: the user's recent queries plus the
@@ -308,19 +280,15 @@ func (h *Handlers) Schemas(c fiber.Ctx) error {
 		return view.Partial(c, "partials/explorer_error", fiber.Map{"Error": err.Error()})
 	}
 	// Honour the allowed_schemas policy when configured.
-	policy, _ := h.Policies.ForEnvironment(c.Context(), conn.Environment)
-	if allowed := policy.AllowedSchemaList(); len(allowed) > 0 {
-		var filtered []connectors.SchemaInfo
-		for _, s := range schemas {
-			for _, a := range allowed {
-				if strings.EqualFold(s.Name, a) {
-					filtered = append(filtered, s)
-					break
-				}
-			}
+	policy := c.Locals("effective_query_policy").(policies.Policy)
+	filtered := schemas[:0]
+	for _, schema := range schemas {
+		if policy.AllowsSchema(schema.Name) {
+			filtered = append(filtered, schema)
 		}
-		schemas = filtered
 	}
+	schemas = filtered
+
 	return view.Partial(c, "partials/explorer_schemas", fiber.Map{
 		"ConnID": conn.ID, "Schemas": schemas, "Mode": c.Query("mode"),
 		"Database": cfg.Database,
@@ -370,10 +338,10 @@ func (h *Handlers) Columns(c fiber.Ctx) error {
 		// Explorer page: full detail pane with tabs + inspector, including the
 		// caller's effective permissions on this object.
 		user := auth.CurrentUser(c)
-		policy, _ := h.Policies.ForEnvironment(c.Context(), conn.Environment)
+		policy := c.Locals("effective_query_policy").(policies.Policy)
 		writePerm := "GRANTED"
 		switch {
-		case conn.ReadOnly:
+		case conn.ReadOnly || !user.CanWrite(conn.Environment):
 			writePerm = "DENIED"
 		case !policy.AllowWriteQueries && !user.IsPrivileged():
 			writePerm = "DENIED"
@@ -393,6 +361,9 @@ func (h *Handlers) Columns(c fiber.Ctx) error {
 }
 
 func (h *Handlers) activeConnections(c fiber.Ctx) ([]*connections.Connection, error) {
+	if !auth.CurrentUser(c).CanQuery() {
+		return nil, fiber.NewError(fiber.StatusForbidden, "your roles do not allow database queries")
+	}
 	conns, err := h.Conns.List(c.Context())
 	if err != nil {
 		return nil, err
@@ -408,12 +379,28 @@ func (h *Handlers) activeConnections(c fiber.Ctx) ([]*connections.Connection, er
 
 // resolve loads the connection, decrypts credentials and picks the connector.
 func (h *Handlers) resolve(c fiber.Ctx) (*connections.Connection, connectors.ConnectionConfig, connectors.DBConnector, func(fiber.Ctx) error) {
+	deny := func(message string) (*connections.Connection, connectors.ConnectionConfig, connectors.DBConnector, func(fiber.Ctx) error) {
+		return nil, connectors.ConnectionConfig{}, nil, func(c fiber.Ctx) error { return fiber.NewError(fiber.StatusForbidden, message) }
+	}
+	if !auth.CurrentUser(c).CanQuery() {
+		return deny("your roles do not allow database queries")
+	}
+
 	conn, err := h.Conns.Get(c.Context(), c.Query("connection"))
 	if err != nil || !conn.IsActive {
 		return nil, connectors.ConnectionConfig{}, nil, func(c fiber.Ctx) error {
 			return view.Partial(c, "partials/explorer_error", fiber.Map{"Error": "connection not found or inactive"})
 		}
 	}
+	policy, err := h.Policies.ForEnvironment(c.Context(), conn.Environment)
+	if err != nil {
+		return deny("security policy unavailable")
+	}
+	if (c.Path() == "/explorer/tables" || c.Path() == "/explorer/columns") && !policy.AllowsSchema(c.Query("schema")) {
+		return deny("schema is not allowed by policy")
+	}
+	c.Locals("effective_query_policy", policy)
+
 	cfg, err := h.Conns.Config(conn)
 	if err != nil {
 		msg := err.Error()

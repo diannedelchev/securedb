@@ -29,7 +29,7 @@ func TestAnalyzeClassification(t *testing.T) {
 		{"ALTER TABLE t ADD COLUMN x int", KindDDL, true},
 		{"CREATE TABLE t (id int)", KindDDL, true},
 		{"EXPLAIN SELECT * FROM t", KindRead, false},
-		{"SHOW TABLES", KindRead, false},
+		{"SHOW search_path", KindRead, false},
 		{"GRANT ALL ON t TO u", KindDDL, true},
 		{"FLUSH PRIVILEGES", KindOther, true}, // unknown fails closed as write
 	}

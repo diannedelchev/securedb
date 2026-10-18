@@ -66,12 +66,11 @@ func TestRuleForColumn(t *testing.T) {
 		"first_name":    false,
 		"amount":        false,
 		"id":            false,
-		// Token columns are surrogates and must never be masked, even when
-		// another pattern (card, pan, secret) also matches the name.
+		// A token suffix cannot exempt a column matching a sensitive rule.
 		"api_token":    false,
-		"card_token":   false,
-		"pan_token":    false,
-		"secret_token": false,
+		"card_token":   true,
+		"pan_token":    true,
+		"secret_token": true,
 		"TOKEN":        false,
 	}
 	for col, want := range cases {
@@ -82,7 +81,7 @@ func TestRuleForColumn(t *testing.T) {
 	}
 }
 
-func TestApplyMaskingLeavesTokenColumnsUnmasked(t *testing.T) {
+func TestApplyMaskingDoesNotExemptSensitiveTokenColumns(t *testing.T) {
 	rules := activeRules()
 	cols := []string{"id", "api_token", "card_token", "client_secret"}
 	rows := [][]string{{"1", "tok_live_9f8e7d6c5b4a", "tok_card_4111", "cs_live_1a2b3c4d5e6f"}}
@@ -90,10 +89,10 @@ func TestApplyMaskingLeavesTokenColumnsUnmasked(t *testing.T) {
 	if _, ok := masked[1]; ok {
 		t.Error("api_token must not be masked")
 	}
-	if _, ok := masked[2]; ok {
-		t.Error("card_token must not be masked")
+	if _, ok := masked[2]; !ok {
+		t.Error("card_token must be masked")
 	}
-	if rows[0][1] != "tok_live_9f8e7d6c5b4a" || rows[0][2] != "tok_card_4111" {
+	if rows[0][1] != "tok_live_9f8e7d6c5b4a" || rows[0][2] == "tok_card_4111" {
 		t.Errorf("token values altered: %q %q", rows[0][1], rows[0][2])
 	}
 	if rows[0][3] != "********" {

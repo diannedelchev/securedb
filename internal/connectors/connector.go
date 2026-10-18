@@ -128,7 +128,14 @@ func runQuery(ctx context.Context, db *sql.DB, req QueryRequest) (QueryResult, e
 		return QueryResult{RowsAffected: affected, Duration: time.Since(start)}, nil
 	}
 
-	rows, err := db.QueryContext(ctx, req.SQL)
+	// Reads run in a database-enforced read-only transaction. This also
+	// rejects writes hidden in SELECT functions or unrecognized read syntax.
+	tx, err := db.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
+	if err != nil {
+		return QueryResult{Duration: time.Since(start)}, err
+	}
+	defer func() { _ = tx.Rollback() }()
+	rows, err := tx.QueryContext(ctx, req.SQL)
 	if err != nil {
 		return QueryResult{Duration: time.Since(start)}, err
 	}

@@ -27,7 +27,7 @@ help: ## Show this help
 config: ## Create config.yaml from config.example.yaml with a generated encryption key
 	@if [ -f config.yaml ]; then echo "config.yaml already exists — not overwriting"; exit 1; fi
 	@sed "s/^  encryption_key: \"\"/  encryption_key: \"$$(openssl rand -hex 32)\"/" config.example.yaml > config.yaml
-	@echo "created config.yaml with generated encryption key — review the database section"
+	@echo "created config.yaml with generated encryption key — review the database section and set seed.admin.password before first boot"
 
 .PHONY: key
 key: ## Print a new 32-byte hex encryption key

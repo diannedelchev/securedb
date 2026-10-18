@@ -11,7 +11,7 @@
     <div class="st-tabs"><span class="on">Result 1</span><span>Messages</span><span>Plan</span></div>
   </div>
   <div class="rg-scroll">
-    <table class="rg-table">
+    <table class="rg-table" data-history-id="{{$o.HistoryID}}" data-allow-export="{{$o.AllowExport}}">
       <thead>
         <tr>
           <th class="rownum">#</th>
@@ -40,13 +40,15 @@
     <button class="foot-action" type="button" onclick="copyResultRows(this)">
       <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 7h8M8 12h8M8 17h5M4 7h.01M4 12h.01M4 17h.01"></path></svg>Copy rows
     </button>
+    {{if $o.AllowExport}}
     <button class="foot-action" type="button" onclick="exportResults('csv')">
       <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12M7 10l5 5 5-5M4 21h16"></path></svg>Export CSV
     </button>
     <button class="foot-action" type="button" onclick="exportResults('json')">
       <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 4H5a1 1 0 0 0-1 1v14a1 1 0 0 0 1 1h2M17 4h2a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1h-2"></path></svg>Export JSON
     </button>
-    <span class="tx">tx: autocommit</span>
+    {{end}}
+    <span class="tx">tx: read-only</span>
   </div>
   {{else}}
   <div class="sqled-status">

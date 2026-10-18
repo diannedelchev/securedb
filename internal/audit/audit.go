@@ -71,8 +71,8 @@ type Logger struct {
 
 func NewLogger(pool *pgxpool.Pool) *Logger { return &Logger{pool: pool} }
 
-// Log writes an audit entry. Audit failures are logged but never fail the request.
-func (l *Logger) Log(ctx context.Context, e Entry) {
+// Log writes an audit entry and returns failures to callers that require durable auditing.
+func (l *Logger) Log(ctx context.Context, e Entry) error {
 	if e.Status == "" {
 		e.Status = "success"
 	}
@@ -90,6 +90,7 @@ func (l *Logger) Log(ctx context.Context, e Entry) {
 	if err != nil {
 		slog.Error("audit log write failed", "action", e.Action, "error", err)
 	}
+	return err
 }
 
 // Severity classifies an event for display.
@@ -97,7 +98,7 @@ func (r *Record) Severity() string {
 	switch {
 	case r.Action == ActionQueryBlocked, r.Action == ActionLoginFailed:
 		return "CRITICAL"
-	case r.Status == "failure", r.Action == ActionUserRoleChanged, r.Action == ActionUserStatusChanged,
+	case r.Status == "running", r.Status == "failure", r.Action == ActionUserRoleChanged, r.Action == ActionUserStatusChanged,
 		r.Action == ActionPolicyUpdated, r.Action == ActionConnectionDeleted,
 		r.Action == ActionGrantApproved, r.Action == ActionGrantRevoked:
 		return "WARN"
@@ -110,6 +111,9 @@ func (r *Record) Severity() string {
 
 // Title is the human headline for an event row.
 func (r *Record) Title() string {
+	if r.Action == ActionQueryExecuted && r.Status == "running" {
+		return "Query started — outcome unconfirmed"
+	}
 	titles := map[string]string{
 		ActionLogin:             "Sign-in",
 		ActionLogout:            "Session ended",

@@ -6,7 +6,7 @@
 
 A secure, browser-based database client for **PostgreSQL**, **MySQL/MariaDB** and
 **Microsoft SQL Server** (stub). Query remote databases from a desktop browser or
-iPad — no local client installs — with bank-grade guardrails: encrypted
+iPad — no local client installs — with security controls: encrypted
 credentials, RBAC, per-environment query policies, approval workflows, data
 masking and a full audit trail.
 
@@ -57,8 +57,11 @@ app and its PostgreSQL database; add your own database connections from the
 
 ### Local development (app on host, database in Docker)
 
+Use Go 1.26.9 or newer. CI checks dependencies with `govulncheck`.
+
 ```bash
 make config      # creates config.yaml with a generated encryption key
+# Set seed.admin.password in config.yaml before continuing.
 make dev         # starts app-db, then runs the app
 ```
 
@@ -104,7 +107,7 @@ security policies, masking rules and a **single admin login** from
 seed:
   admin:
     email: admin@securedb.local
-    password: "change-me-now"   # empty = one-time password printed to the log
+    password: "change-me-now"   # required on first boot; choose your own password
     name: Administrator
 ```
 
@@ -112,6 +115,12 @@ Create further users on **Users & Roles**, and connect your own databases on
 **Connections** (PostgreSQL or MySQL/MariaDB). The docker-compose stack uses
 `SEED_ADMIN_EMAIL` / `SEED_ADMIN_PASSWORD` instead — dev-only values, see the
 comments there.
+
+Set `seed.admin.password` or `SEED_ADMIN_PASSWORD` before the first boot.
+An empty password stops initial account creation; passwords are never logged.
+Existing installations with users do not require a seed password on restart.
+If an earlier version generated a password in the server log, change that
+account's password and remove the exposed credential from retained logs.
 
 ### Try the guardrails
 
@@ -160,9 +169,9 @@ requester's account with the one-time **Run approved query** button.
 | Users & roles | `internal/users` | admin, dba, developer, qa, analyst, auditor |
 | Connections | `internal/connections` | CRUD, test, encrypted passwords, `secrets_reference` placeholder for Vault/ASM |
 | Connectors | `internal/connectors` | `DBConnector` interface; Postgres + MySQL implemented, MSSQL stub |
-| Query pipeline | `internal/query` | policy check → block/approve → execute (timeout + row cap, cancellable) → mask → history + audit |
+| Query pipeline | `internal/query` | role + parsed policy checks → block/approve → durable execution intent → execute (timeout + row cap, cancellable) → mask → durable outcome |
 | Policy engine | `internal/policies` | per-environment max rows/timeout/blocked keywords/write rules; fails closed on unknown statements; risk scoring |
-| Data masking | `internal/policies/masking.go` | column-pattern rules: card/pan, iban, password/secret, national_id/egn; email, phone and `*token*` columns are never masked |
+| Data masking | `internal/policies/masking.go` | source-column rules: card/pan, iban, password/secret, national_id/egn; aliases retain their source rules, and uncertain result provenance is fully redacted |
 | Approvals | `internal/approvals` | pending/approved/rejected/expired, four-eyes (no self-approval), one-time execution, 24 h expiry |
 | Audit | `internal/audit` | every security-sensitive action with user, IP, user agent, query text, severity |
 | Dashboard | `internal/dashboard` | live stats and feeds for the operational grid |
@@ -175,8 +184,20 @@ requester's account with the one-time **Run approved query** button.
   `SameSite=Lax`, `Secure` in production; idle + absolute expiry.
 - CSRF: per-session token verified on every state-changing request (form field
   or `X-CSRF-Token`, sent automatically by HTMX).
-- Read-only connections additionally set `default_transaction_read_only=on`
-  (PostgreSQL) and refuse writes at the connector level (MySQL).
+- PostgreSQL and MySQL reads execute in database-enforced read-only transactions,
+  including reads on otherwise writable connections. Explicit read-only connections
+  reject writes for every role. Query sessions pin PostgreSQL standard-conforming
+  strings and MySQL's standard strict SQL mode so parsing and execution agree.
+- SQL is parsed with libpg_query (embedded WebAssembly, no CGo required) for
+  PostgreSQL and TiDB's MySQL parser. Invalid or unsupported syntax fails closed;
+  non-admin UPDATE/DELETE statements need their own WHERE, including inside CTEs.
+- Analysts can read; auditors cannot query targets. QA can write outside production;
+  developers, DBAs and admins can write subject to policy. Approval/PAM never adds
+  capabilities missing from a user's roles.
+- Enabling SSL requires encryption and certificate/hostname verification for both
+  connectors. Install private CA certificates in the server/container trust store
+  (or configure PostgreSQL's supported root certificate setting); self-signed or
+  untrusted endpoints no longer silently connect.
 - App-database access is fully parameterised (pgx); user SQL only ever reaches
   *target* databases through the connector layer.
 - Optional **SSH tunnel** per connection (bastion/jump host): password or
@@ -189,9 +210,32 @@ requester's account with the one-time **Run approved query** button.
   lifecycle events (`grant_requested/approved/rejected/revoked`) are audited.
 - Multi-database switching validates database names as plain identifiers before
   they touch a DSN; query history and approvals record the target database, and
-  an approval is only executable against the exact SQL **and database** it was
-  reviewed for.
-- Audit log records IP and user agent; secrets are never logged.
+  an approval is atomically consumed for the exact requester, connection, database
+  and SQL it was reviewed for. Expired/used approvals and approvals predating a
+  connection edit cannot execute.
+- With `allowed_schemas` configured, SQL table references must be explicitly
+  schema-qualified and match exactly; the same policy guards explorer endpoints.
+  Routines, casts, implicit search paths and unsupported access paths are rejected
+  under this restriction. CTE references without schema qualification are also
+  conservatively rejected. Views and target-side routines still require carefully
+  scoped database credentials: application checks do not replace database grants.
+- Masking uses parsed direct source columns, not aliases. Expressions, subqueries,
+  CTEs, mixed wildcards and other uncertain projections are fully redacted when
+  masking is enabled. Token suffixes cannot exempt a sensitive source column.
+  For arbitrary analytics with reliable column-level access control, use database
+  views/permissions with restricted credentials. Masking is not protection against
+  inference through query predicates or target-side objects that rename data.
+- Export controls apply to the supported CSV/JSON download flow, with a server
+  policy check and durable audit before download. Already displayed data remains
+  copyable. Export attribution uses the originating history record, even after the
+  editor text or selected connection changes.
+- Missing/unreadable policy or masking configuration blocks execution. Query history
+  and audit intent commit before target SQL starts; completion updates both atomically
+  with bounded retries. A remaining `running` record means the outcome is unconfirmed
+  (including after a process crash). Inspect the target and logs using the history ID
+  before retrying writes; the application never automatically replays target SQL.
+- Audit logs record IP, user agent and submitted SQL. Avoid embedding credentials in
+  SQL literals: query history and audit logs retain the submitted statement.
 
 ### Policy defaults
 
@@ -234,10 +278,22 @@ single self-contained binary at `bin/securedb`.
 make test
 ```
 
-Covers the policy engine (statement classification, comment/literal stripping,
-blocked keywords, WHERE-less writes, read-only enforcement, production approval
-gate, risk scoring) and the masking engine (strategies, column matching, NULL
-passthrough).
+Unit tests cover both SQL dialects, role capabilities, TLS configuration, schema
+checks and source-aware masking. Database integration tests additionally cover
+approval binding/concurrency/expiry, PAM role boundaries, native read-only execution,
+metadata/export authorization and audit/policy outages. CI runs these against
+isolated PostgreSQL 17 and MySQL 8.4 services. To run them locally against disposable
+instances (the PostgreSQL test user needs permission to create/drop test schemas):
+
+```bash
+SECUREDB_TEST_DATABASE_URL='postgres://postgres:test@localhost:5432/securedb_test?sslmode=disable' \
+SECUREDB_TEST_MYSQL_DSN='root:test@tcp(localhost:3306)/securedb_test' \
+go test -race ./...
+```
+
+Migration `0008_execution_audit.sql` adds the durable running state. Deploy migrations
+with the new binary. Before rolling back to older code, reconcile all running rows;
+older binaries do not provide the new execution/audit guarantees.
 
 ## Contributing
 

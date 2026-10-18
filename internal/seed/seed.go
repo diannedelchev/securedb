@@ -12,7 +12,6 @@ import (
 	"golang.org/x/crypto/bcrypt"
 
 	"github.com/diannedelchev/securedb/internal/policies"
-	"github.com/diannedelchev/securedb/internal/security"
 	"github.com/diannedelchev/securedb/internal/users"
 )
 
@@ -50,14 +49,8 @@ func seedAdmin(ctx context.Context, pool *pgxpool.Pool, opts Options) error {
 		return fmt.Errorf("seed.admin.email is required to create the initial account")
 	}
 	password := opts.AdminPassword
-	generated := false
 	if password == "" {
-		var err error
-		password, err = security.RandomToken(12)
-		if err != nil {
-			return err
-		}
-		generated = true
+		return fmt.Errorf("seed.admin.password or SEED_ADMIN_PASSWORD is required to create the initial account")
 	}
 	if len(password) < 8 {
 		return fmt.Errorf("seed.admin.password must be at least 8 characters")
@@ -82,13 +75,7 @@ func seedAdmin(ctx context.Context, pool *pgxpool.Pool, opts Options) error {
 		id, users.RoleAdmin); err != nil {
 		return err
 	}
-	if generated {
-		// One-time credential — shown only in the server log on first boot.
-		slog.Warn("no seed.admin.password configured — generated a one-time password",
-			"email", opts.AdminEmail, "password", password)
-	} else {
-		slog.Info("initial admin account created", "email", opts.AdminEmail)
-	}
+	slog.Info("initial admin account created", "email", opts.AdminEmail)
 	return nil
 }
 

@@ -15,9 +15,20 @@ import (
 type PostgresConnector struct{}
 
 func (p *PostgresConnector) open(conn ConnectionConfig) (*sql.DB, error) {
+	pgxCfg, err := postgresConfig(conn)
+	if err != nil {
+		return nil, err
+	}
+	db := stdlib.OpenDB(*pgxCfg)
+	db.SetMaxOpenConns(2)
+	db.SetConnMaxLifetime(5 * time.Minute)
+	return db, nil
+}
+
+func postgresConfig(conn ConnectionConfig) (*pgx.ConnConfig, error) {
 	sslmode := "disable"
 	if conn.SSL {
-		sslmode = "require"
+		sslmode = "verify-full"
 	}
 	dsn := url.URL{
 		Scheme: "postgres",
@@ -28,6 +39,7 @@ func (p *PostgresConnector) open(conn ConnectionConfig) (*sql.DB, error) {
 	q := url.Values{}
 	q.Set("sslmode", sslmode)
 	q.Set("connect_timeout", "10")
+	q.Set("standard_conforming_strings", "on")
 	if conn.ReadOnly {
 		// Defense in depth: the policy engine already blocks writes, but a
 		// read-only connection also refuses them at the database level.
@@ -52,10 +64,7 @@ func (p *PostgresConnector) open(conn ConnectionConfig) (*sql.DB, error) {
 			return []string{host}, nil
 		}
 	}
-	db := stdlib.OpenDB(*pgxCfg)
-	db.SetMaxOpenConns(2)
-	db.SetConnMaxLifetime(5 * time.Minute)
-	return db, nil
+	return pgxCfg, nil
 }
 
 func (p *PostgresConnector) TestConnection(ctx context.Context, conn ConnectionConfig) error {
@@ -70,6 +79,9 @@ func (p *PostgresConnector) TestConnection(ctx context.Context, conn ConnectionC
 }
 
 func (p *PostgresConnector) ExecuteQuery(ctx context.Context, conn ConnectionConfig, query QueryRequest) (QueryResult, error) {
+	if conn.ReadOnly && query.IsWrite {
+		return QueryResult{}, fmt.Errorf("connection is read-only")
+	}
 	db, err := p.open(conn)
 	if err != nil {
 		return QueryResult{}, err

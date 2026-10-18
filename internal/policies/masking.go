@@ -12,8 +12,8 @@ type MaskingRule struct {
 	IsActive      bool
 }
 
-// DefaultMaskingRules seeds the standard sensitive-column patterns. Email,
-// phone and token columns are intentionally not masked.
+// DefaultMaskingRules seeds the standard sensitive-column patterns. Email and
+// phone are not masked by default; sensitive rules also apply to token columns.
 func DefaultMaskingRules() []MaskingRule {
 	return []MaskingRule{
 		{ColumnPattern: "iban", Strategy: "partial", Description: "IBAN account numbers"},
@@ -26,21 +26,10 @@ func DefaultMaskingRules() []MaskingRule {
 	}
 }
 
-// exemptColumnPatterns are never masked, even when another rule's pattern
-// also matches the column name. Token columns (card_token, pan_token,
-// api_token, ...) hold non-sensitive surrogate values that operators need to
-// see in full, so they are exempt from all rules.
-var exemptColumnPatterns = []string{"token"}
-
 // RuleForColumn finds the first active rule whose pattern is contained in the
-// column name. Returns nil when the column is not sensitive or is exempt.
+// column name. Returns nil when the column is not sensitive.
 func RuleForColumn(rules []MaskingRule, column string) *MaskingRule {
 	col := strings.ToLower(column)
-	for _, ex := range exemptColumnPatterns {
-		if strings.Contains(col, ex) {
-			return nil
-		}
-	}
 	for i := range rules {
 		r := &rules[i]
 		if !r.IsActive {
@@ -143,4 +132,39 @@ func maskPartial(v string) string {
 		return "********"
 	}
 	return v[:3] + strings.Repeat("*", len(v)-5) + v[len(v)-2:]
+}
+
+// ApplyQueryMasking uses parsed source columns so aliases cannot remove masks.
+// Complex projections (expressions, routines, CTEs, set operations and mixed
+// wildcards) are fully redacted: result labels are not trustworthy provenance.
+func ApplyQueryMasking(rules []MaskingRule, a Analysis, columns []string, rows [][]string) map[int]string {
+	masked := ApplyMasking(rules, columns, nil)
+	redactAll := a.RedactAll
+	wildcard := len(a.SourceColumns) == 1 && a.SourceColumns[0] == "*"
+	if !wildcard {
+		if len(a.SourceColumns) != len(columns) {
+			redactAll = true
+		}
+		for i, source := range a.SourceColumns {
+			if source == "*" {
+				redactAll = true
+			}
+			if r := RuleForColumn(rules, source); r != nil {
+				masked[i] = r.Strategy
+			}
+		}
+	}
+	if redactAll {
+		for i := range columns {
+			masked[i] = "redact"
+		}
+	}
+	for _, row := range rows {
+		for i, strategy := range masked {
+			if i < len(row) {
+				row[i] = MaskValue(strategy, row[i])
+			}
+		}
+	}
+	return masked
 }

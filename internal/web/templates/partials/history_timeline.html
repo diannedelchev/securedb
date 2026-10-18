@@ -28,15 +28,19 @@
         <span>Blocked by policy — {{.ErrorMessage}}. Incident recorded in the audit trail.</span>
       </div>
       {{end}}
+      {{if eq .Status "running"}}
+      <div class="qh-block-note">Outcome not yet confirmed. Review the target before retrying writes.</div>
+      {{end}}
       <div class="qh-detail">
         <div class="qh-detail-grid">
+          <span class="qh-k">Execution ID</span><span class="qh-v mono">{{.ID}}</span>
           <span class="qh-k">User</span><span class="qh-v">{{.UserEmail}}</span>
           <span class="qh-k">Database</span><span class="qh-v mono">{{.ConnectionName}}{{if .DatabaseName}} / {{.DatabaseName}}{{end}}</span>
           <span class="qh-k">Status</span><span class="qh-v">{{.Status}}{{if .ErrorMessage}} — {{truncate 90 .ErrorMessage}}{{end}}</span>
           <span class="qh-k">SQL</span><span class="qh-v mono" style="white-space:pre-wrap;word-break:break-word">{{.QueryText}}</span>
         </div>
         <div class="qh-actions">
-          {{if .ConnectionID}}
+          {{if and .ConnectionID (ne .Status "running")}}
           <a class="btn-blue" style="height:28px;font-size:11.5px" href="/editor?connection={{.ConnectionID}}&db={{.DatabaseName}}&sql={{.QueryText}}">
             <svg width="10" height="10" viewBox="0 0 24 24" fill="#fff" stroke="none"><path d="M6 4l14 8-14 8z"></path></svg>Replay in editor
           </a>

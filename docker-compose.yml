@@ -27,8 +27,7 @@ services:
       # real: openssl rand -hex 32
       APP_ENCRYPTION_KEY: "5f2b0f8b6d3e4a1c9d8e7f6a5b4c3d2e1f0a9b8c7d6e5f4a3b2c1d0e9f8a7b6c"
       # Initial admin account, created on first boot (only when no users
-      # exist). Leave SEED_ADMIN_PASSWORD empty to get a one-time password
-      # printed to the app log instead.
+      # exist). A nonempty password is required; it is never printed to logs.
       SEED_ADMIN_EMAIL: "admin@securedb.local"
       SEED_ADMIN_PASSWORD: "admin1234!"
       COOKIE_SECURE: "false"

@@ -33,8 +33,8 @@ sessions:
 
 seed:
   # Single login account created on first boot (only when no users exist).
-  # If password is empty, a one-time password is generated and printed to the
-  # server log.
+  # Set a password here or via SEED_ADMIN_PASSWORD before first boot.
+  # Empty passwords are rejected; credentials are never printed to logs.
   admin:
     email: admin@securedb.local
     password: ""

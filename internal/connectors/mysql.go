@@ -2,9 +2,7 @@ package connectors
 
 import (
 	"context"
-	"crypto/sha256"
 	"database/sql"
-	"encoding/hex"
 	"fmt"
 	"net"
 	"time"
@@ -14,25 +12,30 @@ import (
 
 type MySQLConnector struct{}
 
-// sshNetName registers (idempotently) a custom dial network for a given SSH
-// tunnel config and returns its name for use in the DSN.
-func sshNetName(sshCfg SSHConfig) string {
-	sum := sha256.Sum256([]byte(fmt.Sprintf("%s|%d|%s|%s|%s|%s",
-		sshCfg.Host, sshCfg.Port, sshCfg.User, sshCfg.Password, sshCfg.PrivateKey, sshCfg.HostKeyFingerprint)))
-	name := "ssh" + hex.EncodeToString(sum[:8])
-	mysqldrv.RegisterDialContext(name, func(_ context.Context, addr string) (net.Conn, error) {
-		return dialViaTunnel(sshCfg, addr)
-	})
-	return name
+func (m *MySQLConnector) open(conn ConnectionConfig) (*sql.DB, error) {
+	cfg := mysqlConfig(conn)
+	connector, err := mysqldrv.NewConnector(cfg)
+	if err != nil {
+		return nil, err
+	}
+	db := sql.OpenDB(connector)
+	db.SetMaxOpenConns(2)
+	db.SetConnMaxLifetime(5 * time.Minute)
+	return db, nil
 }
 
-func (m *MySQLConnector) open(conn ConnectionConfig) (*sql.DB, error) {
+func mysqlConfig(conn ConnectionConfig) *mysqldrv.Config {
 	cfg := mysqldrv.NewConfig()
 	cfg.User = conn.Username
 	cfg.Passwd = conn.Password
 	cfg.Net = "tcp"
 	if conn.SSH.Enabled {
-		cfg.Net = sshNetName(conn.SSH)
+		// Keep credentials scoped to this connector rather than registering a
+		// process-global dialer under a credential-derived network name.
+		sshCfg := conn.SSH
+		cfg.DialFunc = func(_ context.Context, _, addr string) (net.Conn, error) {
+			return dialViaTunnel(sshCfg, addr)
+		}
 	}
 	cfg.Addr = fmt.Sprintf("%s:%d", conn.Host, conn.Port)
 	cfg.DBName = conn.Database
@@ -40,15 +43,12 @@ func (m *MySQLConnector) open(conn ConnectionConfig) (*sql.DB, error) {
 	cfg.ReadTimeout = 5 * time.Minute
 	cfg.ParseTime = true
 	if conn.SSL {
-		cfg.TLSConfig = "preferred"
+		cfg.TLSConfig = "true"
 	}
-	db, err := sql.Open("mysql", cfg.FormatDSN())
-	if err != nil {
-		return nil, err
-	}
-	db.SetMaxOpenConns(2)
-	db.SetConnMaxLifetime(5 * time.Minute)
-	return db, nil
+	// Keep lexical interpretation aligned with the parser (no ANSI_QUOTES or
+	// NO_BACKSLASH_ESCAPES), using MySQL's standard strict session mode.
+	cfg.Params = map[string]string{"sql_mode": "'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION'"}
+	return cfg
 }
 
 func (m *MySQLConnector) TestConnection(ctx context.Context, conn ConnectionConfig) error {

@@ -506,7 +506,7 @@
       }
       rows.push(row);
     });
-    return { columns: columns, rows: rows, masked: masked };
+    return { columns: columns, rows: rows, masked: masked, historyID: table.dataset.historyId, allowExport: table.dataset.allowExport === "true" };
   }
 
   // RFC 4180: quote when the value contains a delimiter, quote or newline;
@@ -573,24 +573,17 @@
     setTimeout(function () { URL.revokeObjectURL(url); }, 0);
   }
 
-  // Exporting data out of the gateway is an audited event; the server records
-  // it against the session. Failure to log must not lose the user's file, so
-  // this is fire-and-forget after the download has already started.
-  function recordExport(format, grid) {
+  // Require policy authorization and durable audit before starting a download.
+  async function recordExport(format, grid) {
     var body = new URLSearchParams();
     body.set("_csrf", csrfToken());
     body.set("format", format);
-    body.set("rows", String(grid.rows.length));
-    body.set("columns", String(grid.columns.length));
-    body.set("masked", String(grid.masked.filter(Boolean).length));
-    var ta = document.getElementById("sql-input");
-    if (ta) body.set("sql", ta.value);
-    var conn = document.getElementById("connection-select");
-    if (conn) body.set("connection_id", conn.value);
-    fetch("/query/export", { method: "POST", body: body }).catch(function () {});
+    body.set("history_id", grid.historyID);
+    var response = await fetch("/query/export", { method: "POST", body: body });
+    if (response.status !== 204) throw new Error("Export was denied or its audit could not be saved");
   }
 
-  window.exportResults = function (format) {
+  window.exportResults = async function (format) {
     closeExportMenus();
     var grid = readResultGrid();
     if (!grid) {
@@ -601,6 +594,13 @@
       window.toast("info", "Nothing to export — the query returned no rows");
       return;
     }
+    if (!grid.allowExport) {
+      window.toast("warning", "Export is disabled by policy");
+      return;
+    }
+    format = format === "json" ? "json" : "csv";
+    try { await recordExport(format, grid); }
+    catch (error) { window.toast("error", error.message); return; }
     var stamp = exportStamp();
     if (format === "json") {
       downloadFile("securedb-export-" + stamp + ".json", "application/json", gridToJSON(grid));
@@ -608,7 +608,6 @@
       format = "csv";
       downloadFile("securedb-export-" + stamp + ".csv", "text/csv", gridToCSV(grid));
     }
-    recordExport(format, grid);
     var maskedCount = grid.masked.filter(Boolean).length;
     window.toast("success", grid.rows.length + " row" + (grid.rows.length === 1 ? "" : "s") +
       " exported as " + format.toUpperCase() +
@@ -749,7 +748,7 @@
       }
     }
     var open = document.getElementById("xp-open-editor");
-    if (open) open.href = sel.value ? "/editor?connection=" + sel.value : "/editor";
+    if (open) open.href = sel.value ? "/editor?connection=" + encodeURIComponent(sel.value) : "/editor";
   }
 
   document.addEventListener("DOMContentLoaded", function () {

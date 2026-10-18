@@ -150,16 +150,20 @@ func (s *Service) Decide(ctx context.Context, id, approverID, decision, comments
 	return s.Get(ctx, id)
 }
 
-// MarkExecuted stamps an approved request after its one-time execution.
-func (s *Service) MarkExecuted(ctx context.Context, id string) error {
+// Consume atomically binds an unused approval to its complete execution target.
+// Configuration changes invalidate outstanding approvals for that connection.
+func (s *Service) Consume(ctx context.Context, id, userID, connectionID, database, sql string) error {
 	tag, err := s.pool.Exec(ctx,
-		`UPDATE approval_requests SET executed_at=now(), updated_at=now()
-		 WHERE id=$1 AND status='approved' AND executed_at IS NULL`, id)
+		`UPDATE approval_requests r SET executed_at=now(), updated_at=now()
+		 WHERE r.id=$1 AND r.user_id=$2 AND r.connection_id=$3 AND r.database_name=$4 AND r.query_text=$5
+		 AND r.status='approved' AND r.executed_at IS NULL AND r.expires_at > now()
+		 AND EXISTS (SELECT 1 FROM database_connections c WHERE c.id=r.connection_id
+		             AND c.is_active AND c.updated_at <= r.created_at)`, id, userID, connectionID, database, sql)
 	if err != nil {
 		return err
 	}
-	if tag.RowsAffected() == 0 {
-		return fmt.Errorf("request is not executable")
+	if tag.RowsAffected() != 1 {
+		return fmt.Errorf("approval is not valid for this query and target")
 	}
 	return nil
 }

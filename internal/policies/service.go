@@ -2,7 +2,9 @@ package policies
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"github.com/jackc/pgx/v5"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -13,8 +15,7 @@ type Service struct {
 
 func NewService(pool *pgxpool.Pool) *Service { return &Service{pool: pool} }
 
-// ForEnvironment loads the policy for an environment, falling back to safe
-// defaults if none is configured.
+// ForEnvironment fails closed if policy is missing or cannot be read.
 func (s *Service) ForEnvironment(ctx context.Context, env string) (Policy, error) {
 	var p Policy
 	err := s.pool.QueryRow(ctx,
@@ -23,13 +24,16 @@ func (s *Service) ForEnvironment(ctx context.Context, env string) (Policy, error
 		 FROM security_policies WHERE environment=$1`, env).
 		Scan(&p.ID, &p.Environment, &p.MaxRows, &p.TimeoutSeconds, &p.AllowExport, &p.RequireApprovalWrites,
 			&p.AllowWriteQueries, &p.MaskSensitiveColumns, &p.AllowedSchemas, &p.BlockedKeywords)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return Policy{}, fmt.Errorf("no security policy configured for %s", env)
+	}
 	if err != nil {
-		return DefaultPolicy(env), nil
+		return Policy{}, fmt.Errorf("load security policy: %w", err)
 	}
 	return p, nil
 }
 
-// DefaultPolicy is the fail-safe used when no row exists for an environment.
+// DefaultPolicy supplies initial settings for seeding, never an execution fallback.
 func DefaultPolicy(env string) Policy {
 	p := Policy{
 		Environment:          env,

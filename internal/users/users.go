@@ -83,7 +83,17 @@ func (u *User) PrimaryRole() string {
 func (u *User) IsAdmin() bool      { return u.HasRole(RoleAdmin) }
 func (u *User) IsApprover() bool   { return u.HasRole(RoleAdmin) || u.HasRole(RoleDBA) }
 func (u *User) IsPrivileged() bool { return u.HasRole(RoleAdmin) || u.HasRole(RoleDBA) }
-func (u *User) RoleLabel() string  { return strings.Join(u.Roles, ", ") }
+
+// CanQuery and CanWrite define execution capabilities, independently of
+// approval windows. Multiple roles grant the union of their capabilities.
+func (u *User) CanQuery() bool {
+	return u != nil && u.IsActive && (u.IsPrivileged() || u.HasRole(RoleDeveloper) || u.HasRole(RoleQA) || u.HasRole(RoleAnalyst))
+}
+func (u *User) CanWrite(environment string) bool {
+	return u.CanQuery() && (u.IsPrivileged() || u.HasRole(RoleDeveloper) || (u.HasRole(RoleQA) && environment != "production"))
+}
+
+func (u *User) RoleLabel() string { return strings.Join(u.Roles, ", ") }
 
 type Service struct {
 	pool *pgxpool.Pool

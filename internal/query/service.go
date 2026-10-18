@@ -3,6 +3,7 @@ package query
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"strings"
 	"sync"
 	"time"
@@ -22,6 +23,8 @@ import (
 // Outcome is what the SQL editor renders after a run.
 type Outcome struct {
 	RunID           string
+	HistoryID       string
+	AllowExport     bool
 	Status          string // success | error | blocked | pending_approval
 	Message         string
 	Result          *connectors.QueryResult
@@ -142,6 +145,9 @@ type ExecRequest struct {
 
 // Execute runs the full pipeline for a user-submitted query.
 func (s *Service) Execute(ctx context.Context, req ExecRequest) Outcome {
+	if !req.User.CanQuery() {
+		return Outcome{Status: "blocked", Message: "your roles do not allow database queries"}
+	}
 	conn, err := s.conns.Get(ctx, req.ConnectionID)
 	if err != nil {
 		return Outcome{Status: "error", Message: "connection not found"}
@@ -159,15 +165,25 @@ func (s *Service) Execute(ctx context.Context, req ExecRequest) Outcome {
 		return Outcome{Status: "error", Message: fmt.Sprintf("invalid database name %q", database)}
 	}
 
-	policy, _ := s.policies.ForEnvironment(ctx, conn.Environment)
+	policy, err := s.policies.ForEnvironment(ctx, conn.Environment)
+	if err != nil {
+		return Outcome{Status: "error", Message: "security policy unavailable; query was not executed"}
+	}
 	decision := policies.Evaluate(policies.CheckInput{
 		SQL:          req.SQL,
+		Dialect:      conn.DBType,
 		IsAdmin:      req.User.IsAdmin(),
 		IsPrivileged: req.User.IsPrivileged(),
 		ConnReadOnly: conn.ReadOnly,
 		Environment:  conn.Environment,
 		Policy:       policy,
 	})
+
+	if decision.Analysis.IsWrite && !req.User.CanWrite(conn.Environment) {
+		decision.Allowed = false
+		decision.RequiresApproval = false
+		decision.Reason = "your roles do not allow writes in this environment"
+	}
 
 	auditBase := audit.Entry{
 		UserID: req.User.ID, ConnectionID: conn.ID, EntityType: "query",
@@ -184,18 +200,9 @@ func (s *Service) Execute(ctx context.Context, req ExecRequest) Outcome {
 		usedGrant = true
 	}
 
-	// Approved re-execution bypasses the approval gate (the SQL was already
-	// reviewed) but still honours all hard blocks. The approval is only valid
-	// for the exact SQL and target database it was reviewed for.
+	// An explicit approval is consumed below after all hard checks, even when
+	// policy or a PAM window no longer requires one. It can never be reused.
 	if req.ApprovalID != "" && decision.RequiresApproval {
-		ar, err := s.approv.Get(ctx, req.ApprovalID)
-		if err != nil || ar.UserID != req.User.ID || !ar.CanExecute() ||
-			ar.QueryText != req.SQL || ar.DatabaseName != database {
-			return Outcome{Status: "error", Message: "approval is not valid for this query"}
-		}
-		if err := s.approv.MarkExecuted(ctx, ar.ID); err != nil {
-			return Outcome{Status: "error", Message: err.Error()}
-		}
 		decision.Allowed = true
 		decision.RequiresApproval = false
 	}
@@ -239,6 +246,26 @@ func (s *Service) Execute(ctx context.Context, req ExecRequest) Outcome {
 		return Outcome{Status: "error", Message: err.Error(), Decision: decision}
 	}
 
+	var maskingRules []policies.MaskingRule
+	if policy.MaskSensitiveColumns {
+		maskingRules, err = s.policies.MaskingRules(ctx)
+		if err != nil {
+			return Outcome{Status: "error", Message: "masking policy unavailable; query was not executed"}
+		}
+	}
+	// Persist an intent before any target-side effects. The durable running
+	// record remains visible if completion cannot be confirmed.
+	historyID, err := s.beginExecution(ctx, req, conn.ID, database)
+	if err != nil {
+		return Outcome{Status: "error", Message: "audit storage unavailable; query was not executed"}
+	}
+	if req.ApprovalID != "" {
+		if err := s.approv.Consume(ctx, req.ApprovalID, req.User.ID, conn.ID, database, req.SQL); err != nil {
+			_ = s.finishExecution(historyID, "error", err.Error(), 0, 0)
+			return Outcome{Status: "error", Message: err.Error()}
+		}
+	}
+
 	// Register a cancellable run so the UI can stop it. The client sends its
 	// own run ID so the Stop button works while this request is in flight.
 	runID := req.RunID
@@ -247,6 +274,9 @@ func (s *Service) Execute(ctx context.Context, req ExecRequest) Outcome {
 	}
 	runCtx, cancel := context.WithCancel(context.WithoutCancel(ctx))
 	s.mu.Lock()
+	if _, exists := s.running[runID]; exists {
+		runID = uuid.NewString()
+	}
 	s.running[runID] = runHandle{cancel: cancel, userID: req.User.ID}
 	s.mu.Unlock()
 	defer func() {
@@ -278,39 +308,29 @@ func (s *Service) Execute(ctx context.Context, req ExecRequest) Outcome {
 			status = "cancelled"
 			msg = "query cancelled"
 		}
-		s.recordHistory(ctx, req.User.ID, conn.ID, database, req.SQL, status, msg, 0, int(durationMS))
-		e := auditBase
-		e.Action = audit.ActionQueryExecuted
-		e.Status = "failure"
-		e.ErrorMessage = msg
-		s.audit.Log(ctx, e)
+		if err := s.finishExecution(historyID, status, msg, 0, int(durationMS)); err != nil {
+			msg += "; audit outcome could not be saved; review the pending execution before retrying"
+		}
 		return Outcome{RunID: runID, Status: status, Message: msg, Decision: decision, DurationMS: durationMS}
 	}
 
-	// Data masking for read results.
 	var maskedCols map[int]string
-	if policy.MaskSensitiveColumns && len(result.Rows) > 0 {
-		rules, err := s.policies.MaskingRules(ctx)
-		if err != nil || len(rules) == 0 {
-			rules = policies.DefaultMaskingRules()
-			for i := range rules {
-				rules[i].IsActive = true
-			}
-		}
-		maskedCols = policies.ApplyMasking(rules, result.Columns, result.Rows)
+	if policy.MaskSensitiveColumns {
+		maskedCols = policies.ApplyQueryMasking(maskingRules, decision.Analysis, result.Columns, result.Rows)
 	}
 
 	rowCount := len(result.Rows)
 	if decision.Analysis.IsWrite {
 		rowCount = int(result.RowsAffected)
 	}
-	s.recordHistory(ctx, req.User.ID, conn.ID, database, req.SQL, "success", "", rowCount, int(durationMS))
-	e := auditBase
-	e.Action = audit.ActionQueryExecuted
-	s.audit.Log(ctx, e)
+	if err := s.finishExecution(historyID, "success", "", rowCount, int(durationMS)); err != nil {
+		return Outcome{RunID: runID, Status: "error", Message: "query completed, but its audit outcome could not be saved; do not retry writes until the pending execution is reviewed"}
+	}
 
 	return Outcome{
 		RunID:         runID,
+		HistoryID:     historyID,
+		AllowExport:   policy.AllowExport,
 		Status:        "success",
 		Result:        &result,
 		MaskedColumns: maskedCols,
@@ -333,10 +353,13 @@ func (s *Service) Cancel(runID, userID string, isAdmin bool) bool {
 }
 
 func (s *Service) recordHistory(ctx context.Context, userID, connID, database, sql, status, errMsg string, rows, durationMS int) {
-	_, _ = s.pool.Exec(ctx,
+	_, err := s.pool.Exec(ctx,
 		`INSERT INTO query_history (user_id, connection_id, database_name, query_text, status, error_message, row_count, duration_ms)
 		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
 		userID, connID, database, sql, status, errMsg, rows, durationMS)
+	if err != nil {
+		slog.Error("query history write failed", "status", status, "error", err)
+	}
 }
 
 // History lists a user's recent queries; auditors/admins may view everyone's.

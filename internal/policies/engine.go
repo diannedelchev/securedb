@@ -48,9 +48,8 @@ const (
 	KindOther StatementKind = "other"
 )
 
-// Analysis is the result of lightweight SQL classification. It intentionally
-// works on a normalized copy with comments and string literals stripped, so
-// keywords inside literals never trigger false positives.
+// Analysis records dialect-parsed statement types, bounds and result provenance.
+// Normalized text supplements operation checks for configured keyword filters.
 type Analysis struct {
 	Kind           StatementKind
 	FirstKeyword   string
@@ -58,6 +57,13 @@ type Analysis struct {
 	HasWhere       bool
 	MultiStatement bool
 	Normalized     string
+	ParseError     string
+	UnboundedWrite bool
+	Relations      []Relation
+	SourceColumns  []string // direct projection columns, in result order; * means wildcard
+	RedactAll      bool     // result provenance cannot be established safely
+	IndirectAccess bool     // routines/casts or unsupported statements may access other schemas
+	Operations     []string
 }
 
 var wsRe = regexp.MustCompile(`\s+`)
@@ -128,57 +134,14 @@ var ddlKeywords = map[string]bool{
 	"GRANT": true, "REVOKE": true, "RENAME": true, "COMMENT": true, "VACUUM": true,
 }
 
-// Analyze classifies a SQL statement without a full parser: good enough to
-// enforce guardrails, and always failing closed (unknown = write).
-func Analyze(sql string) Analysis {
-	norm := stripSQL(sql)
-	a := Analysis{Normalized: norm, Kind: KindOther}
-	trimmed := strings.TrimSuffix(strings.TrimSpace(norm), ";")
-	if trimmed == "" {
-		a.FirstKeyword = ""
-		return a
-	}
-	// Multi-statement: any interior semicolon after removing one trailing ;
-	a.MultiStatement = strings.Contains(trimmed, ";")
-
-	fields := strings.Fields(trimmed)
-	a.FirstKeyword = fields[0]
-	// WITH ... can front either a read or a write CTE; look at the verb after
-	// the CTE definition.
-	kw := a.FirstKeyword
-	if kw == "WITH" {
-		for _, f := range fields[1:] {
-			if writeKeywords[f] || ddlKeywords[f] {
-				kw = f
-				break
-			}
-			if f == "SELECT" {
-				kw = "SELECT"
-				break
-			}
-		}
-	}
-	switch {
-	case ddlKeywords[kw]:
-		a.Kind = KindDDL
-		a.IsWrite = true
-	case writeKeywords[kw]:
-		a.Kind = KindWrite
-		a.IsWrite = true
-	case readKeywords[kw]:
-		a.Kind = KindRead
-	default:
-		// Fail closed: anything we cannot classify is treated as a write.
-		a.Kind = KindOther
-		a.IsWrite = true
-	}
-	a.HasWhere = regexp.MustCompile(`\bWHERE\b`).MatchString(trimmed)
-	return a
-}
+// Analyze uses PostgreSQL syntax for historical display and callers without a dialect.
+// Execution always supplies the connection's dialect to AnalyzeDialect.
+func Analyze(sql string) Analysis { return AnalyzeDialect(sql, "postgres") }
 
 // CheckInput bundles everything the policy engine needs for a decision.
 type CheckInput struct {
 	SQL          string
+	Dialect      string
 	IsAdmin      bool
 	IsPrivileged bool // admin or dba
 	ConnReadOnly bool
@@ -198,9 +161,13 @@ type Decision struct {
 // Evaluate applies the guardrails, in order of severity. Reasons are meant to
 // be shown verbatim to the user and stored in the audit trail.
 func Evaluate(in CheckInput) Decision {
-	a := Analyze(in.SQL)
+	a := AnalyzeDialect(in.SQL, in.Dialect)
 	d := Decision{Analysis: a, RiskScore: riskScore(a, in.Environment)}
 
+	if a.ParseError != "" {
+		d.Reason = "query cannot be safely analyzed: " + a.ParseError
+		return d
+	}
 	if strings.TrimSpace(a.Normalized) == "" {
 		d.Reason = "empty query"
 		return d
@@ -209,16 +176,24 @@ func Evaluate(in CheckInput) Decision {
 		d.Reason = "multiple statements per request are not allowed"
 		return d
 	}
+	if !in.IsAdmin && a.Kind == KindOther {
+		d.Reason = "unsupported statement type"
+		return d
+	}
+	if err := in.Policy.CheckSchemas(a); err != nil {
+		d.Reason = err.Error()
+		return d
+	}
 	// Blocked keywords apply to everyone except admins.
 	if !in.IsAdmin {
 		for _, kw := range in.Policy.BlockedKeywordList() {
-			if regexp.MustCompile(`\b` + regexp.QuoteMeta(kw) + `\b`).MatchString(a.Normalized) {
+			if regexp.MustCompile(`\b` + regexp.QuoteMeta(kw) + `\b`).MatchString(a.Normalized + " " + strings.Join(a.Operations, " ")) {
 				d.Reason = "statement contains blocked keyword " + kw
 				return d
 			}
 		}
-		if (a.FirstKeyword == "DELETE" || a.FirstKeyword == "UPDATE") && !a.HasWhere {
-			d.Reason = a.FirstKeyword + " without a WHERE clause is not allowed"
+		if a.UnboundedWrite {
+			d.Reason = "UPDATE or DELETE without its own WHERE clause is not allowed"
 			return d
 		}
 	}
@@ -255,7 +230,7 @@ func riskScore(a Analysis, environment string) int {
 		score = 90
 	case KindWrite, KindOther:
 		score = 50
-		if (a.FirstKeyword == "DELETE" || a.FirstKeyword == "UPDATE") && !a.HasWhere {
+		if a.UnboundedWrite {
 			score = 85
 		}
 	}
