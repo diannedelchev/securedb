@@ -1,4 +1,4 @@
-module github.com/dian/securedb
+module github.com/diannedelchev/securedb
 
 go 1.26.4
 

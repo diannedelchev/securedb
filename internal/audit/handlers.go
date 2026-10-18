@@ -3,7 +3,7 @@ package audit
 import (
 	"github.com/gofiber/fiber/v3"
 
-	"github.com/dian/securedb/internal/web/view"
+	"github.com/diannedelchev/securedb/internal/web/view"
 )
 
 type Handlers struct {

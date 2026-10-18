@@ -6,8 +6,8 @@ import (
 
 	"github.com/gofiber/fiber/v3"
 
-	"github.com/dian/securedb/internal/audit"
-	"github.com/dian/securedb/internal/users"
+	"github.com/diannedelchev/securedb/internal/audit"
+	"github.com/diannedelchev/securedb/internal/users"
 )
 
 // Handlers implements local email/password login. The Authenticate call is the

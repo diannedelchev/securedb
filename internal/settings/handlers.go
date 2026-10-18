@@ -5,9 +5,9 @@ import (
 
 	"github.com/gofiber/fiber/v3"
 
-	"github.com/dian/securedb/internal/audit"
-	"github.com/dian/securedb/internal/auth"
-	"github.com/dian/securedb/internal/web/view"
+	"github.com/diannedelchev/securedb/internal/audit"
+	"github.com/diannedelchev/securedb/internal/auth"
+	"github.com/diannedelchev/securedb/internal/web/view"
 )
 
 type Handlers struct {

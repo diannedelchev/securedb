@@ -14,17 +14,18 @@ app:
   encryption_key: ""
 
 # Application database — an existing PostgreSQL server.
-# Use either discrete fields or a full `url` (url wins).
-# When running the app via docker-compose, use host.docker.internal instead
-# of localhost to reach a PostgreSQL server on the Docker host.
+# Defaults below match the docker-compose `app-db` service (published on the
+# host as localhost:5433, used by `make dev`). Point these at your own
+# PostgreSQL server for a real deployment; use either discrete fields or a
+# full `url` (url wins).
 database:
   host: localhost
-  port: 5432
+  port: 5433
   name: securedb
   user: securedb
   password: securedb
   sslmode: disable
-  # url: postgres://securedb:securedb@localhost:5432/securedb?sslmode=disable
+  # url: postgres://securedb:securedb@localhost:5433/securedb?sslmode=disable
 
 sessions:
   ttl: 8h        # absolute session lifetime
@@ -38,6 +39,3 @@ seed:
     email: admin@securedb.local
     password: ""
     name: Administrator
-  # Set true to provision demo users + sample connections instead
-  # (used by the docker-compose demo stack).
-  demo_data: false

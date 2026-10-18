@@ -40,9 +40,7 @@ type File struct {
 		IdleTTL string `yaml:"idle_ttl"`
 	} `yaml:"sessions"`
 	Seed struct {
-		// DemoData provisions demo users + sample connections (docker demo).
-		DemoData bool `yaml:"demo_data"`
-		Admin    struct {
+		Admin struct {
 			Email    string `yaml:"email"`
 			Password string `yaml:"password"`
 			Name     string `yaml:"name"`
@@ -61,7 +59,6 @@ type Config struct {
 	TrustProxyIP   bool
 	Env            string
 
-	SeedDemoData      bool
 	SeedAdminEmail    string
 	SeedAdminPassword string
 	SeedAdminName     string
@@ -146,7 +143,6 @@ func applyFile(cfg *Config, f *File) {
 		cfg.SessionIdleTTL = d
 	}
 
-	cfg.SeedDemoData = f.Seed.DemoData
 	set(&cfg.SeedAdminEmail, f.Seed.Admin.Email)
 	set(&cfg.SeedAdminPassword, f.Seed.Admin.Password)
 	set(&cfg.SeedAdminName, f.Seed.Admin.Name)
@@ -183,11 +179,6 @@ func applyEnv(cfg *Config) {
 	if v := os.Getenv("TRUST_PROXY_IP"); v != "" {
 		if b, err := strconv.ParseBool(v); err == nil {
 			cfg.TrustProxyIP = b
-		}
-	}
-	if v := os.Getenv("SEED_DEMO_DATA"); v != "" {
-		if b, err := strconv.ParseBool(v); err == nil {
-			cfg.SeedDemoData = b
 		}
 	}
 }

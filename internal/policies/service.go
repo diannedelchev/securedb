@@ -32,13 +32,13 @@ func (s *Service) ForEnvironment(ctx context.Context, env string) (Policy, error
 // DefaultPolicy is the fail-safe used when no row exists for an environment.
 func DefaultPolicy(env string) Policy {
 	p := Policy{
-		Environment:           env,
-		MaxRows:               500,
-		TimeoutSeconds:        30,
-		AllowExport:           true,
-		AllowWriteQueries:     true,
-		MaskSensitiveColumns:  true,
-		BlockedKeywords:       "DROP,TRUNCATE,ALTER,CREATE,GRANT,REVOKE",
+		Environment:          env,
+		MaxRows:              500,
+		TimeoutSeconds:       30,
+		AllowExport:          true,
+		AllowWriteQueries:    true,
+		MaskSensitiveColumns: true,
+		BlockedKeywords:      "DROP,TRUNCATE,ALTER,CREATE,GRANT,REVOKE",
 	}
 	if env == "production" {
 		p.RequireApprovalWrites = true

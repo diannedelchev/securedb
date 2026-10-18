@@ -8,8 +8,8 @@ import (
 	"github.com/gofiber/fiber/v3"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/dian/securedb/internal/auth"
-	"github.com/dian/securedb/internal/web/view"
+	"github.com/diannedelchev/securedb/internal/auth"
+	"github.com/diannedelchev/securedb/internal/web/view"
 )
 
 type Stats struct {

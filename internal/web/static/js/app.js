@@ -367,7 +367,7 @@
           // Keyword case is intentionally changed; nothing else may differ.
           return t.t === "word" ? t.t + ":" + t.v.toLowerCase() : t.t + ":" + t.v;
         })
-        .join(" ");
+        .join("\x00");
     }
     return sig(before) === sig(after);
   }
@@ -788,3 +788,32 @@
     initEditorResize();
   });
 })();
+
+  // --- Global search (topbar) ---------------------------------------------
+  (function () {
+    var input = document.getElementById("global-search");
+    if (!input) return;
+    document.addEventListener("keydown", function (e) {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        input.focus();
+        input.select();
+      } else if (e.key === "Escape" && document.activeElement === input) {
+        input.value = "";
+        input.dispatchEvent(new Event("input", { bubbles: true }));
+        input.blur();
+      }
+    });
+    input.addEventListener("keydown", function (e) {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        var q = input.value.trim();
+        if (q) window.location.href = "/history?q=" + encodeURIComponent(q);
+      }
+    });
+    document.addEventListener("click", function (e) {
+      var box = document.getElementById("searchbox");
+      var results = document.getElementById("search-results");
+      if (box && results && !box.contains(e.target)) results.innerHTML = "";
+    });
+  })();

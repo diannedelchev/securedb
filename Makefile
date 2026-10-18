@@ -1,17 +1,18 @@
 # SecureDB Web Client — development tasks
 #
-# Quick start:
+# Quick start (zero config):
+#   make up       # app + database in Docker — http://localhost:8080
+# or for local development:
 #   make config   # create config.yaml with a generated encryption key
-#   make dev      # start databases (Docker) + run the app locally
-# or fully containerized:
-#   make up
+#   make dev      # start the database (Docker) + run the app locally
 #
-# All configuration lives in config.yaml (see config.example.yaml).
+# The compose stack is configured via environment variables; config.yaml
+# (see config.example.yaml) is for host runs and real deployments.
 
 SHELL := /bin/bash
 
 BINARY  := bin/securedb
-DB_SVCS := app-db target-postgres target-mysql
+DB_SVCS := app-db
 
 .DEFAULT_GOAL := help
 
@@ -45,7 +46,7 @@ run: ## Run the app locally (configured via config.yaml)
 	go run ./cmd/server
 
 .PHONY: dev
-dev: db-up ## Start databases in Docker, then run the app locally
+dev: db-up ## Start the database in Docker, then run the app locally
 	$(MAKE) run
 
 # ---------------------------------------------------------------- quality
@@ -68,20 +69,20 @@ check: vet test ## Vet + tests
 # ---------------------------------------------------------------- docker
 
 .PHONY: up
-up: ## Build and start the full stack (app + databases)
+up: ## Build and start the full stack (app + database)
 	docker compose up --build -d
-	@echo "SecureDB: http://localhost:8080"
+	@echo "SecureDB: http://localhost:8080  (admin@securedb.local / admin1234!)"
 
 .PHONY: down
 down: ## Stop the full stack
 	docker compose down
 
 .PHONY: db-up
-db-up: ## Start only the databases (app db + sample targets)
+db-up: ## Start only the application database
 	docker compose up -d $(DB_SVCS)
 
 .PHONY: db-down
-db-down: ## Stop only the databases
+db-down: ## Stop only the application database
 	docker compose stop $(DB_SVCS)
 
 .PHONY: logs

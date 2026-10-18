@@ -1,0 +1,28 @@
+{{if .Connections}}
+<div class="sr-group">CONNECTIONS</div>
+{{range .Connections}}
+<a class="sr-item" href="/editor?connection={{.ID}}">
+  <span class="sr-text">
+    <span class="sr-main">{{.Name}}</span>
+    <span class="sr-sub">{{.DBType}} · {{.Host}} · {{.DatabaseName}}</span>
+  </span>
+  <span class="badge {{envClass .Environment}}">{{.Environment}}</span>
+</a>
+{{end}}
+{{end}}
+{{if .Queries}}
+<div class="sr-group">YOUR QUERIES</div>
+{{range .Queries}}
+<a class="sr-item" href="/editor?connection={{.ConnectionID}}&sql={{urlquery .QueryText}}">
+  <span class="sr-text">
+    <span class="sr-main sr-mono">{{truncate 80 .QueryText}}</span>
+    <span class="sr-sub">{{if .ConnectionName}}{{.ConnectionName}} · {{end}}{{fmtTime .CreatedAt}}</span>
+  </span>
+  <span class="badge {{statusClass .Status}}">{{replace .Status "_" " "}}</span>
+</a>
+{{end}}
+<a class="sr-foot" href="/history?q={{urlquery .Q}}">All matching queries →</a>
+{{end}}
+{{if and .Q (not .Connections) (not .Queries)}}
+<div class="sr-empty">No connections or queries match “{{.Q}}”.</div>
+{{end}}

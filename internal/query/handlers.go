@@ -7,13 +7,13 @@ import (
 
 	"github.com/gofiber/fiber/v3"
 
-	"github.com/dian/securedb/internal/audit"
-	"github.com/dian/securedb/internal/auth"
-	"github.com/dian/securedb/internal/connections"
-	"github.com/dian/securedb/internal/connectors"
-	"github.com/dian/securedb/internal/policies"
-	"github.com/dian/securedb/internal/users"
-	"github.com/dian/securedb/internal/web/view"
+	"github.com/diannedelchev/securedb/internal/audit"
+	"github.com/diannedelchev/securedb/internal/auth"
+	"github.com/diannedelchev/securedb/internal/connections"
+	"github.com/diannedelchev/securedb/internal/connectors"
+	"github.com/diannedelchev/securedb/internal/policies"
+	"github.com/diannedelchev/securedb/internal/users"
+	"github.com/diannedelchev/securedb/internal/web/view"
 )
 
 type Handlers struct {
@@ -158,6 +158,38 @@ func truncateText(s string, max int) string {
 		return s
 	}
 	return s[:max] + " …(truncated)"
+}
+
+// Search powers the topbar global search: the user's recent queries plus the
+// visible connections, rendered as a dropdown fragment.
+func (h *Handlers) Search(c fiber.Ctx) error {
+	q := strings.TrimSpace(c.Query("q"))
+	if len(q) < 2 {
+		return view.Partial(c, "partials/search_results", fiber.Map{"Q": q})
+	}
+	user := auth.CurrentUser(c)
+	conns, err := h.Conns.List(c.Context())
+	if err != nil {
+		return err
+	}
+	needle := strings.ToLower(q)
+	var matched []*connections.Connection
+	for _, cn := range conns {
+		haystack := strings.ToLower(cn.Name + " " + cn.Host + " " + cn.Tags + " " + cn.DatabaseName + " " + cn.DBType + " " + cn.Environment)
+		if strings.Contains(haystack, needle) {
+			matched = append(matched, cn)
+		}
+		if len(matched) == 5 {
+			break
+		}
+	}
+	queries, err := h.Svc.SearchHistory(c.Context(), user.ID, q, 8)
+	if err != nil {
+		return err
+	}
+	return view.Partial(c, "partials/search_results", fiber.Map{
+		"Q": q, "Connections": matched, "Queries": queries,
+	})
 }
 
 // HistoryPage lists past queries. Auditors and admins see everyone's history.

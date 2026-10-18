@@ -10,22 +10,22 @@ import (
 	"github.com/gofiber/fiber/v3/middleware/logger"
 	"github.com/gofiber/fiber/v3/middleware/recover"
 
-	"github.com/dian/securedb/internal/approvals"
-	"github.com/dian/securedb/internal/audit"
-	"github.com/dian/securedb/internal/auth"
-	"github.com/dian/securedb/internal/config"
-	"github.com/dian/securedb/internal/connections"
-	"github.com/dian/securedb/internal/dashboard"
-	"github.com/dian/securedb/internal/db"
-	"github.com/dian/securedb/internal/pam"
-	"github.com/dian/securedb/internal/policies"
-	"github.com/dian/securedb/internal/query"
-	"github.com/dian/securedb/internal/security"
-	"github.com/dian/securedb/internal/seed"
-	"github.com/dian/securedb/internal/settings"
-	"github.com/dian/securedb/internal/users"
-	"github.com/dian/securedb/internal/web"
-	"github.com/dian/securedb/migrations"
+	"github.com/diannedelchev/securedb/internal/approvals"
+	"github.com/diannedelchev/securedb/internal/audit"
+	"github.com/diannedelchev/securedb/internal/auth"
+	"github.com/diannedelchev/securedb/internal/config"
+	"github.com/diannedelchev/securedb/internal/connections"
+	"github.com/diannedelchev/securedb/internal/dashboard"
+	"github.com/diannedelchev/securedb/internal/db"
+	"github.com/diannedelchev/securedb/internal/pam"
+	"github.com/diannedelchev/securedb/internal/policies"
+	"github.com/diannedelchev/securedb/internal/query"
+	"github.com/diannedelchev/securedb/internal/security"
+	"github.com/diannedelchev/securedb/internal/seed"
+	"github.com/diannedelchev/securedb/internal/settings"
+	"github.com/diannedelchev/securedb/internal/users"
+	"github.com/diannedelchev/securedb/internal/web"
+	"github.com/diannedelchev/securedb/migrations"
 )
 
 func main() {
@@ -55,11 +55,10 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err := seed.Run(ctx, pool, enc, seed.Options{
+	if err := seed.Run(ctx, pool, seed.Options{
 		AdminEmail:    cfg.SeedAdminEmail,
 		AdminPassword: cfg.SeedAdminPassword,
 		AdminName:     cfg.SeedAdminName,
-		Demo:          cfg.SeedDemoData,
 	}); err != nil {
 		slog.Error("seed", "error", err)
 		os.Exit(1)

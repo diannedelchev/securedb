@@ -6,7 +6,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/dian/securedb/internal/security"
+	"github.com/diannedelchev/securedb/internal/security"
 )
 
 const SessionCookie = "sdb_session"

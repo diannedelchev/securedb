@@ -82,13 +82,6 @@ func NewEngine() *html.Engine {
 			}
 			return out
 		},
-		"seq": func(n int) []int {
-			out := make([]int, n)
-			for i := range out {
-				out[i] = i
-			}
-			return out
-		},
 		"dict": func(kv ...any) (map[string]any, error) {
 			if len(kv)%2 != 0 {
 				return nil, fmt.Errorf("dict needs key/value pairs")

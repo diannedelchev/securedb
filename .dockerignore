@@ -1,0 +1,29 @@
+# Local configuration and secrets — never send to the build context
+config.yaml
+.env
+
+# VCS and editor metadata
+.git/
+.gitignore
+.idea/
+.vscode/
+.claude/
+
+# Build artifacts
+bin/
+*.test
+
+# CI / docs that the image does not need
+.github/
+README.md
+CONTRIBUTING.md
+SECURITY.md
+LICENSE
+CHANGELOG.md
+
+# Docker's own files (compose mounts what it needs at runtime)
+docker-compose*.yml
+.dockerignore
+Dockerfile
+docker/Dockerfile
+Makefile

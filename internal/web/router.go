@@ -7,16 +7,16 @@ import (
 	"github.com/gofiber/fiber/v3"
 	"github.com/gofiber/fiber/v3/middleware/static"
 
-	"github.com/dian/securedb/internal/approvals"
-	"github.com/dian/securedb/internal/audit"
-	"github.com/dian/securedb/internal/auth"
-	"github.com/dian/securedb/internal/connections"
-	"github.com/dian/securedb/internal/dashboard"
-	"github.com/dian/securedb/internal/pam"
-	"github.com/dian/securedb/internal/policies"
-	"github.com/dian/securedb/internal/query"
-	"github.com/dian/securedb/internal/settings"
-	"github.com/dian/securedb/internal/users"
+	"github.com/diannedelchev/securedb/internal/approvals"
+	"github.com/diannedelchev/securedb/internal/audit"
+	"github.com/diannedelchev/securedb/internal/auth"
+	"github.com/diannedelchev/securedb/internal/connections"
+	"github.com/diannedelchev/securedb/internal/dashboard"
+	"github.com/diannedelchev/securedb/internal/pam"
+	"github.com/diannedelchev/securedb/internal/policies"
+	"github.com/diannedelchev/securedb/internal/query"
+	"github.com/diannedelchev/securedb/internal/settings"
+	"github.com/diannedelchev/securedb/internal/users"
 )
 
 //go:embed static
@@ -45,21 +45,23 @@ func Register(app *fiber.App, d Deps) {
 		c.Set("X-Frame-Options", "DENY")
 		c.Set("Referrer-Policy", "same-origin")
 		// unsafe-inline/eval are needed by the inline HTMX helpers; all
-		// template output is auto-escaped by html/template. Google Fonts is
-		// allowed for the IBM Plex design-system fonts.
+		// template output is auto-escaped by html/template. Fonts are
+		// self-hosted under /static/fonts (no third-party origins).
 		c.Set("Content-Security-Policy",
 			"default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; "+
-				"style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "+
-				"font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; frame-ancestors 'none'")
+				"style-src 'self' 'unsafe-inline'; "+
+				"font-src 'self'; img-src 'self' data:; frame-ancestors 'none'")
 		return c.Next()
 	})
 
 	staticSub, _ := fs.Sub(staticFS, "static")
 	app.Get("/static/*", static.New("", static.Config{FS: staticSub, MaxAge: 3600}))
 
-	// Public marketing pages (home falls through to the dashboard when signed in).
-	registerSite(app, d)
+	// Liveness probe for containers and load balancers (no auth).
+	app.Get("/healthz", func(c fiber.Ctx) error { return c.SendString("ok") })
 
+	// Anonymous visitors are sent to the sign-in page by the auth middleware
+	// below; "/" is the authenticated dashboard.
 	app.Get("/login", d.Auth.LoginPage)
 	app.Post("/login", d.Auth.Login)
 
@@ -97,6 +99,7 @@ func Register(app *fiber.App, d Deps) {
 	app.Post("/connections/:id/test", d.Connections.Test)
 
 	app.Get("/editor", d.Query.EditorPage)
+	app.Get("/search", d.Query.Search)
 	app.Post("/query/execute", d.Query.Execute)
 	app.Post("/query/cancel", d.Query.Cancel)
 	app.Post("/query/export", d.Query.Export)

@@ -1,5 +1,5 @@
 // Package seed provisions roles, default policies, masking rules and the
-// initial login account. Seeding is idempotent: user accounts are only created
+// initial login account. Seeding is idempotent: the account is only created
 // when the users table is empty (roles and policies are always upserted).
 package seed
 
@@ -11,9 +11,9 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"golang.org/x/crypto/bcrypt"
 
-	"github.com/dian/securedb/internal/policies"
-	"github.com/dian/securedb/internal/security"
-	"github.com/dian/securedb/internal/users"
+	"github.com/diannedelchev/securedb/internal/policies"
+	"github.com/diannedelchev/securedb/internal/security"
+	"github.com/diannedelchev/securedb/internal/users"
 )
 
 // Options controls what gets provisioned on first boot.
@@ -22,12 +22,9 @@ type Options struct {
 	AdminEmail    string
 	AdminPassword string
 	AdminName     string
-	// Demo additionally provisions demo users and sample connections
-	// (used by the docker-compose demo stack).
-	Demo bool
 }
 
-func Run(ctx context.Context, pool *pgxpool.Pool, enc *security.Encryptor, opts Options) error {
+func Run(ctx context.Context, pool *pgxpool.Pool, opts Options) error {
 	if err := seedRoles(ctx, pool); err != nil {
 		return err
 	}
@@ -43,9 +40,6 @@ func Run(ctx context.Context, pool *pgxpool.Pool, enc *security.Encryptor, opts 
 	}
 	if userCount > 0 {
 		return nil
-	}
-	if opts.Demo {
-		return seedDemo(ctx, pool, enc)
 	}
 	return seedAdmin(ctx, pool, opts)
 }
@@ -152,75 +146,5 @@ func seedMaskingRules(ctx context.Context, pool *pgxpool.Pool) error {
 			return err
 		}
 	}
-	return nil
-}
-
-func seedDemo(ctx context.Context, pool *pgxpool.Pool, enc *security.Encryptor) error {
-	slog.Info("seeding demo data")
-	demoUsers := []struct {
-		email, name, password, role string
-	}{
-		{"admin@securedb.local", "Ada Admin", "admin1234!", users.RoleAdmin},
-		{"dba@securedb.local", "Dana DBA", "dba1234!", users.RoleDBA},
-		{"dev@securedb.local", "Devin Developer", "dev1234!", users.RoleDeveloper},
-		{"auditor@securedb.local", "Audrey Auditor", "audit1234!", users.RoleAuditor},
-	}
-	ids := map[string]string{}
-	for _, du := range demoUsers {
-		hash, err := bcrypt.GenerateFromPassword([]byte(du.password), bcrypt.DefaultCost)
-		if err != nil {
-			return err
-		}
-		var id string
-		err = pool.QueryRow(ctx,
-			`INSERT INTO users (email, display_name, password_hash) VALUES ($1,$2,$3) RETURNING id`,
-			du.email, du.name, string(hash)).Scan(&id)
-		if err != nil {
-			return fmt.Errorf("seed user %s: %w", du.email, err)
-		}
-		if _, err := pool.Exec(ctx,
-			`INSERT INTO user_roles (user_id, role_id) SELECT $1, id FROM roles WHERE name=$2`,
-			id, du.role); err != nil {
-			return err
-		}
-		ids[du.role] = id
-	}
-
-	// Sample target connections matching docker-compose services.
-	pgPass, err := enc.Encrypt("demo")
-	if err != nil {
-		return err
-	}
-	myPass, err := enc.Encrypt("demo")
-	if err != nil {
-		return err
-	}
-	samples := []struct {
-		name, desc, env, dbType, host, dbName, user, pass, tags string
-		port                                                    int
-		readOnly                                                bool
-	}{
-		{"Demo PostgreSQL", "Sample PostgreSQL target with demo data", "development",
-			"postgres", "target-postgres", "demodb", "demo", pgPass, "demo,postgres", 5432, false},
-		{"Demo MySQL", "Sample MySQL target with demo data", "development",
-			"mysql", "target-mysql", "demodb", "demo", myPass, "demo,mysql", 3306, false},
-		{"Prod PostgreSQL (demo)", "Same target labelled production to demo approval flow", "production",
-			"postgres", "target-postgres", "demodb", "demo", pgPass, "demo,production", 5432, false},
-	}
-	for _, sc := range samples {
-		_, err := pool.Exec(ctx,
-			`INSERT INTO database_connections
-			 (name, description, environment, db_type, host, port, database_name, username,
-			  password_encrypted, ssl_enabled, read_only, owner_id, tags, is_active)
-			 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,FALSE,$10,$11,$12,TRUE)`,
-			sc.name, sc.desc, sc.env, sc.dbType, sc.host, sc.port, sc.dbName, sc.user,
-			sc.pass, sc.readOnly, ids[users.RoleAdmin], sc.tags)
-		if err != nil {
-			return fmt.Errorf("seed connection %s: %w", sc.name, err)
-		}
-	}
-	slog.Info("demo data seeded",
-		"admin", "admin@securedb.local / admin1234!",
-		"developer", "dev@securedb.local / dev1234!")
 	return nil
 }

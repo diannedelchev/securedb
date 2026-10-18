@@ -143,14 +143,14 @@ func (r *Record) Title() string {
 
 // Categories for the filter pills, mapped to action sets.
 var Categories = map[string][]string{
-	"auth":      {ActionLogin, ActionLogout, ActionLoginFailed},
-	"queries":   {ActionQueryExecuted, ActionQueryCancelled},
-	"denied":    {ActionQueryBlocked},
-	"exports":   {ActionExportRequested},
+	"auth":    {ActionLogin, ActionLogout, ActionLoginFailed},
+	"queries": {ActionQueryExecuted, ActionQueryCancelled},
+	"denied":  {ActionQueryBlocked},
+	"exports": {ActionExportRequested},
 	"approvals": {ActionApprovalRequested, ActionApprovalApproved, ActionApprovalRejected,
 		ActionGrantRequested, ActionGrantApproved, ActionGrantRejected, ActionGrantRevoked},
-	"roles":     {ActionUserCreated, ActionUserRoleChanged, ActionUserStatusChanged},
-	"conns":     {ActionConnectionCreated, ActionConnectionUpdated, ActionConnectionDeleted, ActionConnectionTested},
+	"roles": {ActionUserCreated, ActionUserRoleChanged, ActionUserStatusChanged},
+	"conns": {ActionConnectionCreated, ActionConnectionUpdated, ActionConnectionDeleted, ActionConnectionTested},
 }
 
 type Filter struct {

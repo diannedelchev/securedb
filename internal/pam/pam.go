@@ -15,9 +15,9 @@ import (
 )
 
 const (
-	MinDuration    = 15 * time.Minute
-	MaxDuration    = 8 * time.Hour
-	RequestExpiry  = 24 * time.Hour // pending requests expire unanswered
+	MinDuration   = 15 * time.Minute
+	MaxDuration   = 8 * time.Hour
+	RequestExpiry = 24 * time.Hour // pending requests expire unanswered
 )
 
 type Grant struct {
@@ -30,7 +30,7 @@ type Grant struct {
 	Environment    string
 	Level          string
 	Reason         string
-	Duration       int // minutes
+	Duration       int    // minutes
 	Status         string // pending | active | rejected | expired | revoked
 	ApproverEmail  string
 	Comments       string

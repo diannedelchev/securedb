@@ -5,13 +5,13 @@ import (
 
 	"github.com/gofiber/fiber/v3"
 
-	"github.com/dian/securedb/internal/audit"
-	"github.com/dian/securedb/internal/auth"
-	"github.com/dian/securedb/internal/connections"
-	"github.com/dian/securedb/internal/pam"
-	"github.com/dian/securedb/internal/policies"
-	"github.com/dian/securedb/internal/users"
-	"github.com/dian/securedb/internal/web/view"
+	"github.com/diannedelchev/securedb/internal/audit"
+	"github.com/diannedelchev/securedb/internal/auth"
+	"github.com/diannedelchev/securedb/internal/connections"
+	"github.com/diannedelchev/securedb/internal/pam"
+	"github.com/diannedelchev/securedb/internal/policies"
+	"github.com/diannedelchev/securedb/internal/users"
+	"github.com/diannedelchev/securedb/internal/web/view"
 )
 
 type Handlers struct {

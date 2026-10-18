@@ -4,7 +4,6 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{{if .Title}}{{.Title}} · {{end}}SecureDB</title>
-  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/static/css/app.css">
   <script src="/static/js/htmx.min.js" defer></script>
   <script src="/static/js/app.js" defer></script>
@@ -18,7 +17,6 @@
       </div>
       <div class="brand-text">
         <span class="brand-name">SecureDB</span>
-        <span class="brand-sub">ENTERPRISE</span>
       </div>
     </div>
     <div class="sidebar-rule"></div>
@@ -93,10 +91,13 @@
     <header class="topbar">
       <span class="page-title">{{.Title}}</span>
       <div style="flex:1"></div>
-      <div class="searchbox" title="Search (coming soon)">
+      <div class="searchbox" id="searchbox">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#64708A" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16zM21 21l-4.3-4.3"></path></svg>
-        <span>Search connections, queries…</span>
+        <input id="global-search" type="text" name="q" placeholder="Search connections, queries…"
+               autocomplete="off" spellcheck="false"
+               hx-get="/search" hx-trigger="input changed delay:250ms" hx-target="#search-results">
         <kbd>⌘K</kbd>
+        <div id="search-results" class="search-results"></div>
       </div>
       {{if .User}}
       <a class="bellbox" href="/approvals" title="Pending approvals">

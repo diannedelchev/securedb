@@ -57,11 +57,11 @@ type TableInfo struct {
 }
 
 type ColumnInfo struct {
-	Name       string
-	DataType   string
-	Nullable   bool
-	Default    string
-	IsPrimary  bool
+	Name      string
+	DataType  string
+	Nullable  bool
+	Default   string
+	IsPrimary bool
 }
 
 type IndexInfo struct {

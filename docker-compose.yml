@@ -1,3 +1,17 @@
+# SecureDB local stack: the app and its PostgreSQL database.
+#
+#   docker compose up --build -d      # or: make up
+#
+# Open http://localhost:8080 and sign in with the seeded admin account
+# (admin@securedb.local / admin1234! — dev only, change it after first login).
+#
+# Everything is configured here via environment variables so a fresh clone
+# runs without any setup. For anything beyond local evaluation create a real
+# config.yaml (`make config`) and mount it instead of using APP_* variables:
+#   volumes:
+#     - ./config.yaml:/etc/securedb/config.yaml:ro
+#   environment:
+#     CONFIG_FILE: /etc/securedb/config.yaml
 services:
   app:
     build:
@@ -6,20 +20,50 @@ services:
     ports:
       - "8080:8080"
     environment:
-      CONFIG_FILE: /etc/securedb/config.yaml
-    volumes:
-      # All configuration comes from config.yaml (create it with `make config`,
-      # see config.example.yaml). NOTE: inside the container `localhost` is the
-      # container itself — set database.host to `host.docker.internal` to reach
-      # a PostgreSQL server running on the Docker host.
-      - ./config.yaml:/etc/securedb/config.yaml:ro
+      APP_ADDR: ":8080"
+      DATABASE_URL: "postgres://securedb:securedb@app-db:5432/securedb?sslmode=disable"
+      # DEV-ONLY key so a fresh clone just works. Encrypted data in the
+      # app-db volume is tied to this key. Generate your own for anything
+      # real: openssl rand -hex 32
+      APP_ENCRYPTION_KEY: "5f2b0f8b6d3e4a1c9d8e7f6a5b4c3d2e1f0a9b8c7d6e5f4a3b2c1d0e9f8a7b6c"
+      # Initial admin account, created on first boot (only when no users
+      # exist). Leave SEED_ADMIN_PASSWORD empty to get a one-time password
+      # printed to the app log instead.
+      SEED_ADMIN_EMAIL: "admin@securedb.local"
+      SEED_ADMIN_PASSWORD: "admin1234!"
+      COOKIE_SECURE: "false"
+    depends_on:
+      app-db:
+        condition: service_healthy
     extra_hosts:
       - "host.docker.internal:host-gateway"
     restart: unless-stopped
 
-  # Optional Redis (not required by the MVP; enable with --profile cache)
+  # Application database (users, sessions, connections, policies, audit).
+  app-db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: securedb
+      POSTGRES_PASSWORD: securedb
+      POSTGRES_DB: securedb
+    volumes:
+      - app-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U securedb -d securedb"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+    # Published on 5433 so it never clashes with a PostgreSQL on the host;
+    # config.example.yaml points here for `make dev`.
+    ports:
+      - "5433:5432"
+
+  # Optional Redis (not required yet; enable with --profile cache)
   redis:
     image: redis:7-alpine
     profiles: ["cache"]
     ports:
       - "6379:6379"
+
+volumes:
+  app-db-data:

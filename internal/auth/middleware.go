@@ -5,7 +5,7 @@ import (
 
 	"github.com/gofiber/fiber/v3"
 
-	"github.com/dian/securedb/internal/users"
+	"github.com/diannedelchev/securedb/internal/users"
 )
 
 // Locals keys used across handlers.

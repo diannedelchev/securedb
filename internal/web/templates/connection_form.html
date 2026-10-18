@@ -15,7 +15,7 @@
         </div>
         <div class="wstep">
           <div class="wstep-rail"><span class="wstep-dot">3</span><span class="wstep-line"></span></div>
-          <div class="wstep-body"><span class="wstep-name">Authentication</span><span class="wstep-hint">Credentials or secret ref</span></div>
+          <div class="wstep-body"><span class="wstep-name">Authentication</span><span class="wstep-hint">Username and password</span></div>
         </div>
         <div class="wstep">
           <div class="wstep-rail"><span class="wstep-dot">4</span></div>
@@ -118,30 +118,20 @@
 
         <span class="wsection">3 · Authentication</span>
         <div class="auth-cards">
-          <div class="auth-card{{if not .Conn.SecretsReference}} on{{end}}" data-auth="password" onclick="pickAuth(this)">
+          <div class="auth-card on">
             <span class="auth-check"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"></path></svg></span>
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM2 21v-1a6 6 0 0 1 12 0v1M15 8h6M18 5v6"></path></svg>
             <span class="auth-name">Username / password</span>
             <span class="auth-hint">Encrypted at rest (AES-256-GCM)</span>
-          </div>
-          <div class="auth-card{{if .Conn.SecretsReference}} on{{end}}" data-auth="secret" onclick="pickAuth(this)">
-            <span class="auth-check"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"></path></svg></span>
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6zM9 12l2 2 4-4"></path></svg>
-            <span class="auth-name">Secrets reference</span>
-            <span class="auth-hint">Vault / AWS Secrets Manager (planned)</span>
           </div>
         </div>
         <label class="field">
           <span class="lbl">USERNAME</span>
           <input type="text" name="username" value="{{.Conn.Username}}" required autocomplete="off">
         </label>
-        <label class="field" id="auth-password">
+        <label class="field">
           <span class="lbl">PASSWORD {{if not .IsNew}}<span style="color:var(--text-faint);font-weight:400">(leave blank to keep current)</span>{{end}}</span>
           <input type="password" name="password" autocomplete="new-password">
-        </label>
-        <label class="field" id="auth-secret" style="display:none">
-          <span class="lbl">SECRET PATH</span>
-          <input type="text" name="secrets_reference" value="{{.Conn.SecretsReference}}" placeholder="vault:database/creds/app-readwrite" class="mono">
         </label>
 
         <span class="wsection">4 · Details &amp; finish</span>
@@ -180,16 +170,3 @@
   </div>
 </div>
 
-<script>
-function pickAuth(card) {
-  document.querySelectorAll(".auth-card").forEach(function (c) { c.classList.remove("on"); });
-  card.classList.add("on");
-  var isSecret = card.getAttribute("data-auth") === "secret";
-  document.getElementById("auth-password").style.display = isSecret ? "none" : "block";
-  document.getElementById("auth-secret").style.display = isSecret ? "block" : "none";
-}
-document.addEventListener("DOMContentLoaded", function () {
-  var on = document.querySelector(".auth-card.on");
-  if (on) pickAuth(on);
-});
-</script>
