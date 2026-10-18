@@ -27,18 +27,6 @@ follow the design screens, with responsive breakpoints for iPad widths.
 |---|---|
 | ![SQL Editor](docs/screenshots/editor.png) | ![Approval Requests](docs/screenshots/approvals.png) |
 
-| Database Explorer | Connections |
-|---|---|
-| ![Database Explorer](docs/screenshots/explorer.png) | ![Connections](docs/screenshots/connections.png) |
-
-| Query History | Audit Logs |
-|---|---|
-| ![Query History](docs/screenshots/history.png) | ![Audit Logs](docs/screenshots/audit.png) |
-
-| Security Center | Users & Roles |
-|---|---|
-| ![Security Center](docs/screenshots/policies.png) | ![Users & Roles](docs/screenshots/users.png) |
-
 ## Architecture
 
 ```
