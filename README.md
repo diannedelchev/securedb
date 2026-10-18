@@ -4,18 +4,39 @@
 [![Go Report Card](https://goreportcard.com/badge/github.com/diannedelchev/securedb)](https://goreportcard.com/report/github.com/diannedelchev/securedb)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-A secure, browser-based database client for **PostgreSQL**, **MySQL/MariaDB** and
-**Microsoft SQL Server** (stub). Query remote databases from a desktop browser or
-iPad — no local client installs — with security controls: encrypted
-credentials, RBAC, per-environment query policies, approval workflows, data
-masking and a full audit trail.
+A browser-based SQL client for **PostgreSQL** and **MySQL/MariaDB** that puts a
+policy layer between people and production data: encrypted shared credentials,
+role-based access, per-environment query guardrails, four-eyes approvals,
+just-in-time access windows, result masking and a durable audit trail. Works
+from a desktop browser or an iPad with nothing to install.
 
-**Stack:** Go · Fiber v3 · PostgreSQL · server-side rendered HTML · HTMX · custom CSS.
-**UI:** dark-first enterprise design system (IBM Plex Sans/Mono, deep navy palette,
-compact data density) implemented from the SecureDB Claude Design project —
-Login, Dashboard, Connections + wizard, SQL Editor, Database Explorer, Query
-History, Audit Logs, Security Center, Users & Roles, and Approval Requests all
-follow the design screens, with responsive breakpoints for iPad widths.
+**Stack:** Go · Fiber v3 · PostgreSQL (app database) · server-rendered HTML · HTMX.
+Templates, static assets and migrations are embedded, so a build is one binary.
+
+## Why
+
+Handing out database passwords and a VPN gives every engineer the same
+unbounded access, leaves no record of what was run, and makes offboarding a
+credential-rotation exercise. SecureDB keeps the real credentials on the
+server, decides per statement whether a user may run it, and writes down who
+ran what, where, and with which outcome.
+
+## Contents
+
+- [Screenshots](#screenshots)
+- [Architecture](#architecture)
+- [Quick start](#quick-start)
+- [Configuration](#configuration)
+- [Roles and permissions](#roles-and-permissions)
+- [Security model](#security-model)
+- [Known limitations](#known-limitations)
+- [Deploying for real](#deploying-for-real)
+- [Screens](#screens)
+- [Project structure](#project-structure)
+- [Tests](#tests)
+- [Roadmap](#roadmap)
+- [Contributing](#contributing)
+- [License](#license)
 
 ## Screenshots
 
@@ -34,16 +55,19 @@ Browser / iPad
    → Go Fiber SSR web app          (templates + HTMX fragments)
       → Control plane services      (auth, policies, approvals, audit)
          → Connector layer          (DBConnector interface)
-            → PostgresConnector / MySQLConnector / MSSQLConnector (stub)
+            → PostgresConnector / MySQLConnector
                → Target databases
 ```
 
 Database credentials are AES-256-GCM encrypted in the app database, decrypted
-just-in-time inside the connector layer, and **never sent to the browser**.
+just-in-time inside the connector layer, and never sent to the browser.
 
 ## Quick start
 
-### Fully containerized (zero config)
+Prerequisites: Docker and `make`. For the host-run variant, also Go at the
+version in `go.mod`.
+
+### Fully containerized
 
 ```bash
 git clone https://github.com/diannedelchev/securedb.git && cd securedb
@@ -51,13 +75,12 @@ make up          # docker compose up --build -d
 ```
 
 Open **http://localhost:8080** and sign in with the seeded admin account
-(**admin@securedb.local / admin1234!** — dev only). The stack brings up the
-app and its PostgreSQL database; add your own database connections from the
-**Connections** page.
+(**admin@securedb.local / admin1234!**, local evaluation only). The stack
+brings up the app and its PostgreSQL database. Sign in as the admin to add a
+database connection on **Connections**; creating connections is limited to
+the admin and DBA roles.
 
-### Local development (app on host, database in Docker)
-
-Use Go 1.26.9 or newer. CI checks dependencies with `govulncheck`.
+### App on the host, database in Docker
 
 ```bash
 make config      # creates config.yaml with a generated encryption key
@@ -65,225 +88,249 @@ make config      # creates config.yaml with a generated encryption key
 make dev         # starts app-db, then runs the app
 ```
 
-Open **http://localhost:8080** (or whatever `app.addr` you set).
-
-Run `make` with no arguments to list all targets (`test`, `vet`, `logs`,
+Run `make` with no arguments to list all targets (`test`, `check`, `logs`,
 `reset`, …).
-
-## Configuration
-
-Configuration is layered — later sources win:
-
-1. **Built-in defaults**
-2. **`config.yaml`** (path via `CONFIG_FILE`, default `./config.yaml`) — see
-   `config.example.yaml`. It points the app at an **existing PostgreSQL server**
-   (`database.host/port/name/user/password` or a full `database.url`), sets the
-   listen address, encryption key, session lifetimes and the seed account.
-   Create it with `make config`.
-3. **Environment variables** — `APP_ADDR`, `APP_ENV`, `DATABASE_URL`,
-   `APP_ENCRYPTION_KEY`, `COOKIE_SECURE`, `TRUST_PROXY_IP`, `SESSION_TTL`,
-   `SESSION_IDLE_TTL`, `SEED_ADMIN_*`. The docker-compose
-   stack uses these so a fresh clone runs with zero setup; for real
-   deployments mount a `config.yaml` instead (see the comments in
-   `docker-compose.yml`).
-4. **`app_settings` table** in the application database — runtime-tunable
-   settings (session TTL / idle TTL). Seeded from config on first boot, edited
-   afterwards on the admin **Settings** page; changes apply without a restart
-   and the database value wins.
-
-> ⚠️ The `APP_ENCRYPTION_KEY` and admin password in `docker-compose.yml` are
-> **public and for local evaluation only**. Generate your own key
-> (`openssl rand -hex 32` or `make key`) for anything else — all encrypted
-> credentials become unreadable if the key changes, and anyone can decrypt
-> them if it stays the public one.
-
-### Initial account
-
-On first boot against an empty database, seeding creates roles, per-environment
-security policies, masking rules and a **single admin login** from
-`seed.admin` in `config.yaml`:
-
-```yaml
-seed:
-  admin:
-    email: admin@securedb.local
-    password: "change-me-now"   # required on first boot; choose your own password
-    name: Administrator
-```
-
-Create further users on **Users & Roles**, and connect your own databases on
-**Connections** (PostgreSQL or MySQL/MariaDB). The docker-compose stack uses
-`SEED_ADMIN_EMAIL` / `SEED_ADMIN_PASSWORD` instead — dev-only values, see the
-comments there.
-
-Set `seed.admin.password` or `SEED_ADMIN_PASSWORD` before the first boot.
-An empty password stops initial account creation; passwords are never logged.
-Existing installations with users do not require a seed password on restart.
-If an earlier version generated a password in the server log, change that
-account's password and remove the exposed credential from retained logs.
 
 ### Try the guardrails
 
-Once you have added a connection, open the SQL editor and try:
+Once a connection exists, open the SQL editor and try:
 
 ```sql
--- masking: columns matching card/iban/egn patterns come back masked
--- (emails and phones do not)
+-- masking: columns matching card/pan, iban, password/secret, national_id/egn
+-- come back masked (emails and phones do not)
 SELECT * FROM customers;
 
--- blocked for non-admins (no WHERE)
+-- blocked for non-admins: no WHERE clause
 DELETE FROM customers;
 
 -- blocked keyword
 DROP TABLE payments;
 
--- on a connection labelled "production", a write from a non-privileged
--- account creates an approval request instead of executing
+-- on a connection labelled "production", a write from a non-admin account
+-- creates an approval request instead of executing
 UPDATE customers SET first_name = 'X' WHERE id = 1;
 ```
 
-Approve it as an admin/DBA on **Approval Requests** (the detail pane shows
-the SQL, an automated risk analysis and a timeline), then run it from the
-requester's account with the one-time **Run approved query** button.
+Approve it as a second admin/DBA on **Approval Requests** (the detail pane
+shows the SQL, an automated risk analysis and a timeline), then run it from
+the requester's account with the one-time **Run approved query** button.
 
-## Screens
+## Configuration
 
-| Screen | What it does |
-|---|---|
-| **Sign in** | Split-screen login at `/login` — the entry point for anonymous visitors (any unauthenticated request redirects here; signed-in users land on the Dashboard) |
-| **Dashboard** | KPI cards, 24h query-volume histogram, slow queries, recent connections, environment status, pending access requests, activity timeline |
-| **Connections** | Card grid with env/read-only/tag chips, last-used, test/edit/connect; wizard-style create/edit form with selectable auth methods. **One connection covers every database on the server** — it stores a default database, and the editor/explorer can switch to any other database the credentials can reach (PostgreSQL via `pg_database`, MySQL via schemas) |
-| **SQL Editor** | Full-bleed IDE: schema tree, tabs, Run ⌘⏎ / Explain / Stop, LIMIT selector (100 / 500 default / Unlimited) + READ-ONLY chip, line-numbered editor, result grid with masking badges, Copy rows, saved queries & history rail; production banner with approval-reason input |
-| **Database Explorer** | Three-pane: filterable object tree → tabbed Columns/Constraints/Indexes grid → inspector with object stats and your effective permissions |
-| **Query History** | Day-grouped timeline with risk badges, blocked-query callouts, expandable execution detail, replay & copy |
-| **Audit Logs** | Severity-coded event list with category pills, click-through detail panel (statement, actor, origin) — auditors/DBAs/admins only |
-| **Security Center** | Posture score computed from live policy config, threat timeline, blocked-queries chart, risk indicators, per-environment policy editors, masking rules |
-| **Users & Roles** | Role badges, permission summaries, per-user manage modal (roles + enable/disable), admin only. Every user can change their own password from the sidebar; doing so signs out their other sessions |
-| **Approval Requests** | Master-detail review of both request types: one-time query approvals (SQL, automated risk checks, risk meter) and **PAM access windows** — just-in-time, time-bound write grants (15m–8h) requested via the "Request access window" button, approved/revoked by Admins/DBAs (four-eyes). While a window is active, the holder's production writes run without per-query approval (tagged `JIT WINDOW`); hard guardrails and auditing still apply |
+Configuration is layered; later sources win:
 
-## Modules
+1. **Built-in defaults**
+2. **`config.yaml`** (path via `CONFIG_FILE`, default `./config.yaml`), created
+   with `make config`. See [`config.example.yaml`](config.example.yaml) for
+   every key: the app database (an existing PostgreSQL server), listen
+   address, encryption key, cookie and proxy flags, session lifetimes and the
+   seed account.
+3. **Environment variables**: `APP_ADDR`, `APP_ENV`, `DATABASE_URL`,
+   `APP_ENCRYPTION_KEY`, `COOKIE_SECURE`, `TRUST_PROXY_IP`, `SESSION_TTL`,
+   `SESSION_IDLE_TTL`, `SEED_ADMIN_EMAIL`, `SEED_ADMIN_PASSWORD`,
+   `SEED_ADMIN_NAME`. The docker-compose stack uses these so a fresh clone
+   runs with zero setup.
+4. **`app_settings` table** in the app database: runtime-tunable settings
+   (session TTL and idle TTL). Seeded from config on first boot, edited
+   afterwards on the admin **Settings** page without a restart.
 
-| Module | Where | Notes |
-|---|---|---|
-| Authentication | `internal/auth` | Local login, server-side sessions (SHA-256 hashed tokens), CSRF, idle + absolute timeout. `Authenticate` is the single seam for adding Azure AD/O365 SSO. |
-| Users & roles | `internal/users` | admin, dba, developer, qa, analyst, auditor |
-| Connections | `internal/connections` | CRUD, test, encrypted passwords, `secrets_reference` placeholder for Vault/ASM |
-| Connectors | `internal/connectors` | `DBConnector` interface; Postgres + MySQL implemented, MSSQL stub |
-| Query pipeline | `internal/query` | role + parsed policy checks → block/approve → durable execution intent → execute (timeout + row cap, cancellable) → mask → durable outcome |
-| Policy engine | `internal/policies` | per-environment max rows/timeout/blocked keywords/write rules; fails closed on unknown statements; risk scoring |
-| Data masking | `internal/policies/masking.go` | source-column rules: card/pan, iban, password/secret, national_id/egn; aliases retain their source rules, and uncertain result provenance is fully redacted |
-| Approvals | `internal/approvals` | pending/approved/rejected/expired, four-eyes (no self-approval), one-time execution, 24 h expiry |
-| Audit | `internal/audit` | every security-sensitive action with user, IP, user agent, query text, severity |
-| Dashboard | `internal/dashboard` | live stats and feeds for the operational grid |
+> ⚠️ The `APP_ENCRYPTION_KEY` and admin password in `docker-compose.yml` are
+> public and for local evaluation only. Generate your own key with `make key`
+> (`openssl rand -hex 32`) before storing any real credential. Anything
+> encrypted under the public key can be decrypted by anyone.
+
+**Initial account.** On first boot against an empty database, seeding creates
+the roles, per-environment policies, masking rules and a single admin login
+from `seed.admin` (or `SEED_ADMIN_*`). A password of at least 8 characters is
+required; it is never logged. Once users exist, the seed password is ignored
+on later restarts. Create further users on **Users & Roles**; every user can
+then change their own password from the sidebar.
+
+## Roles and permissions
+
+A user can hold several roles and gets the union of their capabilities.
+
+| Capability | admin | dba | developer | qa | analyst | auditor |
+|---|:-:|:-:|:-:|:-:|:-:|:-:|
+| Run read queries | ✓ | ✓ | ✓ | ✓ | ✓ | |
+| Write in development / staging | ✓ | ✓ | ✓ | ✓ | | |
+| Write in production | ✓ | approval¹ | approval¹ | | | |
+| Bypass blocked keywords, WHERE and multi-statement rules | ✓ | | | | | |
+| Create connections | ✓ | ✓ | | | | |
+| Edit / delete / test connections | all | all | own² | own² | own² | own² |
+| Approve queries and access windows (four-eyes) | ✓ | ✓ | | | | |
+| See everyone's approval requests | ✓ | ✓ | | | | ✓ |
+| See everyone's query history | ✓ | | | | | ✓ |
+| View audit logs | ✓ | ✓ | | | | ✓ |
+| Edit security policies, users, settings | ✓ | | | | | |
+| Change own password | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+
+¹ When the production policy has *require approval for writes* enabled
+(the default). An active PAM access window on that connection replaces
+per-query approval. ² Only for connections they created before creation was
+restricted to admins and DBAs. Every user who can query sees every active
+connection.
 
 ## Security model
 
-- Passwords: bcrypt. DB credentials: AES-256-GCM with `app.encryption_key`
-  from `config.yaml`; never rendered to any template.
-- Sessions: opaque 256-bit cookie token, hash stored server-side; `HttpOnly`,
-  `SameSite=Lax`, `Secure` in production; idle + absolute expiry.
-- CSRF: per-session token verified on every state-changing request (form field
-  or `X-CSRF-Token`, sent automatically by HTMX).
-- PostgreSQL and MySQL reads execute in database-enforced read-only transactions,
-  including reads on otherwise writable connections. Explicit read-only connections
-  reject writes for every role. Query sessions pin PostgreSQL standard-conforming
-  strings and MySQL's standard strict SQL mode so parsing and execution agree.
-- SQL is parsed with libpg_query (embedded WebAssembly, no CGo required) for
-  PostgreSQL and TiDB's MySQL parser. Invalid or unsupported syntax fails closed;
-  non-admin UPDATE/DELETE statements need their own WHERE, including inside CTEs.
-- Analysts can read; auditors cannot query targets. QA can write outside production;
-  developers, DBAs and admins can write subject to policy. Approval/PAM never adds
-  capabilities missing from a user's roles.
-- Enabling SSL requires encryption and certificate/hostname verification for both
-  connectors. Install private CA certificates in the server/container trust store
-  (or configure PostgreSQL's supported root certificate setting); self-signed or
-  untrusted endpoints no longer silently connect.
-- App-database access is fully parameterised (pgx); user SQL only ever reaches
-  *target* databases through the connector layer.
-- Optional **SSH tunnel** per connection (bastion/jump host): password or
-  private-key auth, credentials AES-256-GCM encrypted at rest, optional host-key
-  fingerprint pinning (mismatches are rejected; empty pin accepts any key — dev
-  only). One SSH session per database connection, torn down with it.
-- PAM (Privileged Access Management): just-in-time access windows are
-  four-eyes approved, auto-expire, are revocable, and never bypass hard
-  guardrails (blocked keywords, WHERE rules, read-only connections). Grant
-  lifecycle events (`grant_requested/approved/rejected/revoked`) are audited.
-- Multi-database switching validates database names as plain identifiers before
-  they touch a DSN; query history and approvals record the target database, and
-  an approval is atomically consumed for the exact requester, connection, database
-  and SQL it was reviewed for. Expired/used approvals and approvals predating a
-  connection edit cannot execute.
-- With `allowed_schemas` configured, SQL table references must be explicitly
-  schema-qualified and match exactly; the same policy guards explorer endpoints.
-  Routines, casts, implicit search paths and unsupported access paths are rejected
-  under this restriction. CTE references without schema qualification are also
-  conservatively rejected. Views and target-side routines still require carefully
-  scoped database credentials: application checks do not replace database grants.
-- Masking uses parsed direct source columns, not aliases. Expressions, subqueries,
-  CTEs, mixed wildcards and other uncertain projections are fully redacted when
-  masking is enabled. Token suffixes cannot exempt a sensitive source column.
-  For arbitrary analytics with reliable column-level access control, use database
-  views/permissions with restricted credentials. Masking is not protection against
-  inference through query predicates or target-side objects that rename data.
-- Export controls apply to the supported CSV/JSON download flow, with a server
-  policy check and durable audit before download. Already displayed data remains
-  copyable. Export attribution uses the originating history record, even after the
-  editor text or selected connection changes.
-- Missing/unreadable policy or masking configuration blocks execution. Query history
-  and audit intent commit before target SQL starts; completion updates both atomically
-  with bounded retries. A remaining `running` record means the outcome is unconfirmed
-  (including after a process crash). Inspect the target and logs using the history ID
-  before retrying writes; the application never automatically replays target SQL.
-- Audit logs record IP, user agent and submitted SQL. Avoid embedding credentials in
-  SQL literals: query history and audit logs retain the submitted statement.
+**Authentication and sessions**
+- Passwords are bcrypt hashed. Sessions are opaque 256-bit cookie tokens with
+  only the SHA-256 hash stored server-side; `HttpOnly`, `SameSite=Lax`,
+  `Secure` when `cookie_secure` is on; idle and absolute expiry.
+- A per-session CSRF token is verified on every state-changing request (form
+  field or `X-CSRF-Token`, which HTMX sends automatically).
+- Changing a password revokes the user's other sessions. Deactivating a user
+  or changing their roles takes effect on their next request.
 
-### Policy defaults
+**Credentials**
+- Database and SSH tunnel credentials are AES-256-GCM encrypted with
+  `app.encryption_key` and decrypted just-in-time in the connector layer.
+  They are never rendered to a template.
+- Enabling SSL on a connection requires certificate and hostname verification
+  for both engines; untrusted endpoints do not silently connect.
+- Optional SSH tunnel per connection (password or private key) with optional
+  host-key fingerprint pinning. One SSH session per database connection.
 
-- Row limit chosen per run in the editor: **100**, **500** (default) or **Unlimited**; the
-  policy's max rows (**500**) is only the fallback when no selection is sent. Timeout **30 s**
-  (editable per environment in Security Center)
-- Blocked keywords for non-admins: `DROP, TRUNCATE, ALTER, CREATE, GRANT, REVOKE`
-- `DELETE`/`UPDATE` without `WHERE`: blocked for non-admins
-- Multi-statement requests: blocked for non-admins
-- Production writes: require Admin/DBA approval (24 h expiry, executes once)
+**Query guardrails**
+- SQL is parsed with libpg_query (embedded WebAssembly, no CGo) for PostgreSQL
+  and TiDB's parser for MySQL. Unparseable or unsupported statements fail
+  closed for everyone.
+- Reads run in database-enforced read-only transactions, even on writable
+  connections. Read-only connections reject writes for every role.
+- Per-environment policy: row cap, timeout, blocked keywords, write
+  permission, approval requirement, allowed schemas, masking on or off.
+  With `allowed_schemas` set, table references must be schema-qualified.
+- Approvals bind to the exact requester, connection, database and SQL text,
+  execute once, expire after 24 h, and are void if the connection is edited
+  after the request. Nobody can approve their own request.
+- PAM access windows (15 min to 8 h) are four-eyes approved, auto-expire, are
+  revocable, and never bypass hard guardrails.
+
+**Masking and export**
+- Masking rules match the parsed source column, so aliases cannot strip a
+  mask. Expressions, subqueries, CTEs and other projections whose provenance
+  cannot be established are fully redacted.
+- CSV/JSON export is policy-gated per environment and audited before the
+  download starts, attributed to the originating history record.
+
+**Auditing**
+- Every security-relevant action is recorded with user, IP, user agent and
+  submitted SQL. Query intent is committed before target SQL starts and the
+  outcome is written afterwards, so a crash leaves a visible `running` record
+  rather than a silent gap.
+
+**Policy defaults:** row limit 500 (the editor can pick 100, 500 or
+Unlimited), timeout 30 s, blocked keywords `DROP, TRUNCATE, ALTER, CREATE,
+GRANT, REVOKE`, production writes require approval and production export is
+off. All editable per environment in **Security Center**.
+
+## Known limitations
+
+Read these before relying on the app as a control:
+
+- **No login rate limiting or lockout.** Failed sign-ins are audited but not
+  throttled. Put a rate limit on `POST /login` at the reverse proxy.
+- **No forgotten-password reset.** There is no outbound email. An admin sets
+  a temporary password and the user changes it after signing in.
+- **SSH host key verification is opt-in.** Without a pinned fingerprint the
+  tunnel accepts any bastion key. Pin it for anything but local testing.
+- **Masking is not a security boundary.** It does not prevent inference
+  through predicates (`WHERE card = '…'`) or target-side views and routines
+  that rename data. Use database grants and views for real column-level
+  control.
+- **Application checks do not replace database grants.** Give each
+  connection a target-side account scoped to what its users should reach.
+- **Connections are visible to every user who can query.** Per-connection
+  permissions are not implemented yet (see Roadmap).
+- **A `running` history record means an unconfirmed outcome.** Inspect the
+  target before retrying a write; the app never replays SQL on its own.
+- **Query cancellation is per instance.** Sessions live in the app database,
+  so several instances can share it, but **Stop** only reaches queries
+  running on the instance that received the request.
+- **Microsoft SQL Server is not supported.** The connector is a stub.
+
+## Deploying for real
+
+The compose file is an evaluation setup. For a deployment that holds real
+credentials:
+
+1. **Terminate HTTPS at a reverse proxy** and set `app.cookie_secure: true`,
+   otherwise the session cookie is sent over plain HTTP.
+2. **Set `app.trust_proxy_ip: true`** when behind a proxy. Client addresses
+   are then read from `X-Forwarded-For` for proxies on loopback or private
+   networks; without it every audit entry records the proxy's IP.
+3. **Generate a unique encryption key** (`make key`) and treat it like a
+   master password. It cannot be rotated in place: changing it makes every
+   stored credential unreadable. Back it up together with the app database.
+4. **Keep the app database private.** It holds password hashes, session
+   hashes, encrypted credentials and the audit trail. Use a dedicated
+   PostgreSQL role and `sslmode=require` or stricter.
+5. **Pin SSH host keys** on every tunnelled connection.
+6. **Use scoped database accounts** per connection on the target side.
+7. **Rate-limit `POST /login`** at the proxy.
+
+The container runs as a non-root user, exposes port 8080 and answers
+`GET /healthz` for liveness checks. Migrations run automatically at start.
+Back up the app database before upgrading; roll back only after reconciling
+any `running` history rows, since older binaries do not understand them.
+
+## Screens
+
+| Screen | Purpose |
+|---|---|
+| **Sign in** | Local email/password login; unauthenticated requests redirect here |
+| **Dashboard** | KPIs, 24 h query volume, slow queries, recent connections, pending requests, activity feed |
+| **Connections** | Create/edit/test connections (admin and DBA); one connection reaches every database its credentials can see |
+| **SQL Editor** | Schema tree, editor with highlighting and formatting, Run / Stop, LIMIT selector, masked result grid, export, saved queries and history |
+| **Database Explorer** | Object tree with columns, constraints, indexes and your effective permissions on each table |
+| **Query History** | Day-grouped timeline with risk badges, blocked-query callouts and replay |
+| **Audit Logs** | Severity-coded event list with category filters and a detail panel (admin, DBA, auditor) |
+| **Security Center** | Posture score, threat feed, per-environment policy editors and masking rules (editing is admin only) |
+| **Users & Roles** | Create users, assign roles, enable or disable accounts (admin only) |
+| **Approval Requests** | Review one-time query approvals and PAM access windows; requesters see their own, approvers and auditors see all |
 
 ## Project structure
 
 ```
 cmd/server            entrypoint
-internal/auth         sessions, CSRF, login handlers
+internal/auth         sessions, CSRF, login, password change
 internal/audit        audit log service + screens
 internal/approvals    approval workflow
-internal/config       env configuration
+internal/config       configuration loading
 internal/connections  connection CRUD + credential encryption
-internal/connectors   DBConnector interface + drivers
+internal/connectors   DBConnector interface, Postgres and MySQL drivers, SSH tunnel
 internal/dashboard    dashboard data
 internal/db           pool + embedded migration runner
-internal/policies     policy engine, masking, security center
+internal/pam          just-in-time access windows
+internal/policies     policy engine, SQL analysis, masking, security center
 internal/query        execution pipeline, history, editor/explorer handlers
 internal/security     AES-GCM, token helpers
 internal/seed         roles, default policies, initial admin account
+internal/settings     runtime-tunable settings
 internal/users        user management
 internal/web          router, template engine, templates, static assets
 migrations            SQL migrations (embedded)
 docker                Dockerfile for the app image
 ```
 
-Templates, static assets and migrations are embedded — `make build` produces a
-single self-contained binary at `bin/securedb`.
+`make build` produces a single self-contained binary at `bin/securedb`.
 
 ## Tests
 
 ```bash
-make test
+make test        # unit tests
+make check       # go vet + tests
 ```
 
-Unit tests cover both SQL dialects, role capabilities, TLS configuration, schema
-checks and source-aware masking. Database integration tests additionally cover
-approval binding/concurrency/expiry, PAM role boundaries, native read-only execution,
-metadata/export authorization and audit/policy outages. CI runs these against
-isolated PostgreSQL 17 and MySQL 8.4 services. To run them locally against disposable
-instances (the PostgreSQL test user needs permission to create/drop test schemas):
+Unit tests cover both SQL dialects, role capabilities, TLS configuration,
+schema checks, source-aware masking, connection authorization and proxy IP
+handling. Database integration tests additionally cover approval binding,
+concurrency and expiry, PAM role boundaries, native read-only execution,
+metadata and export authorization, and audit or policy outages. CI runs
+`gofmt`, `go vet`, `govulncheck`, the Go tests against PostgreSQL 17 and
+MySQL 8.4, and the JavaScript tests. To run the integration tests locally
+against disposable instances (the PostgreSQL user needs permission to create
+and drop test schemas):
 
 ```bash
 SECUREDB_TEST_DATABASE_URL='postgres://postgres:test@localhost:5432/securedb_test?sslmode=disable' \
@@ -291,25 +338,22 @@ SECUREDB_TEST_MYSQL_DSN='root:test@tcp(localhost:3306)/securedb_test' \
 go test -race ./...
 ```
 
-Migration `0008_execution_audit.sql` adds the durable running state. Deploy migrations
-with the new binary. Before rolling back to older code, reconcile all running rows;
-older binaries do not provide the new execution/audit guarantees.
+## Roadmap
+
+- Login rate limiting and account lockout
+- Per-connection permissions (`connection_permissions` table already migrated)
+- Microsoft SQL Server connector (`github.com/microsoft/go-mssqldb` behind the existing stub)
+- Azure AD / Office 365 SSO (OIDC) on the existing session layer
+- `EXPLAIN` visualisation (toolbar placeholder exists)
+- CodeMirror editor (the textarea is intentionally isolated in `editor.html`)
+- Vault / AWS Secrets Manager resolution for `secrets_reference`
+- Shared cancel registry so **Stop** works across instances
 
 ## Contributing
 
-Contributions are welcome — see [CONTRIBUTING.md](CONTRIBUTING.md). Please
+Contributions are welcome; see [CONTRIBUTING.md](CONTRIBUTING.md). Please
 report security issues privately per [SECURITY.md](SECURITY.md).
 
 ## License
 
 [MIT](LICENSE) © Dian Nedelchev
-
-## Roadmap (post-MVP)
-
-- Microsoft SQL Server connector (`github.com/microsoft/go-mssqldb` behind the existing stub)
-- Azure AD / Office365 SSO (OIDC) on the existing session layer
-- CodeMirror editor (textarea is intentionally isolated in `editor.html`)
-- Result export + `EXPLAIN` visualisation (toolbar placeholders exist)
-- Vault / AWS Secrets Manager resolution for `secrets_reference`
-- Per-connection permissions (`connection_permissions` table already migrated)
-- Redis-backed sessions for multi-instance deployments (compose profile `cache`)
