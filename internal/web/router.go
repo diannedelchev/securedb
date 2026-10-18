@@ -90,9 +90,12 @@ func Register(app *fiber.App, d Deps) {
 	app.Get("/", d.Dashboard.Dashboard)
 	app.Get("/dashboard/volume", d.Dashboard.Volume)
 
+	// Registering a connection makes this server open outbound TCP/SSH
+	// sessions with shared credentials, so only admins and DBAs may do it.
+	connAdmin := auth.RequireRole(users.RoleAdmin, users.RoleDBA)
 	app.Get("/connections", d.Connections.List)
-	app.Get("/connections/new", d.Connections.NewForm)
-	app.Post("/connections", d.Connections.Create)
+	app.Get("/connections/new", connAdmin, d.Connections.NewForm)
+	app.Post("/connections", connAdmin, d.Connections.Create)
 	app.Get("/connections/:id/edit", d.Connections.EditForm)
 	app.Post("/connections/:id", d.Connections.Update)
 	app.Delete("/connections/:id", d.Connections.Delete)

@@ -99,14 +99,13 @@ func main() {
 	// Templates (embedded, SSR).
 	engine := web.NewEngine()
 
-	app := fiber.New(fiber.Config{
+	app := fiber.New(withProxy(fiber.Config{
 		Views:        engine,
 		AppName:      "SecureDB Web Client",
 		ErrorHandler: errorHandler,
-		ProxyHeader:  proxyHeader(cfg),
 		ReadTimeout:  2 * time.Minute,
 		WriteTimeout: 15 * time.Minute, // long-running queries stream back through here
-	})
+	}, cfg))
 	app.Use(recover.New())
 	app.Use(logger.New())
 
@@ -148,9 +147,16 @@ func errorHandler(c fiber.Ctx, err error) error {
 	}, "layouts/main")
 }
 
-func proxyHeader(cfg *config.Config) string {
-	if cfg.TrustProxyIP {
-		return "X-Forwarded-For"
+// withProxy makes c.IP() (used for every audit entry) resolve the real client
+// address when the app runs behind a reverse proxy. Fiber only reads the
+// forwarded header from peers it trusts, so ProxyHeader alone is ignored; with
+// trust_proxy_ip on, proxies on loopback or private networks are trusted.
+func withProxy(fc fiber.Config, cfg *config.Config) fiber.Config {
+	if !cfg.TrustProxyIP {
+		return fc
 	}
-	return ""
+	fc.ProxyHeader = fiber.HeaderXForwardedFor
+	fc.TrustProxy = true
+	fc.TrustProxyConfig = fiber.TrustProxyConfig{Loopback: true, Private: true}
+	return fc
 }

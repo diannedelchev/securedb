@@ -8,7 +8,8 @@ app:
   addr: ":8080"
   env: development          # development | production
   cookie_secure: false      # true when serving over HTTPS
-  trust_proxy_ip: false     # true only behind a trusted reverse proxy
+  trust_proxy_ip: false     # true only behind a reverse proxy; client IPs are then read from
+                            # X-Forwarded-For when the proxy is on loopback or a private network
   # REQUIRED — 32-byte hex key for AES-256-GCM credential encryption.
   # Generate with: openssl rand -hex 32
   encryption_key: ""

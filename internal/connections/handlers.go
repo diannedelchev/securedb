@@ -18,8 +18,12 @@ type Handlers struct {
 }
 
 // canManage: admins and DBAs manage all connections, owners manage their own.
+// Creating a connection is restricted to admins and DBAs at the router, so an
+// owner is normally privileged; the owner clause keeps older records editable.
+// Managing includes testing: a test dials the target (and any SSH bastion)
+// from this server with the stored credentials and echoes the dial error.
 func canManage(u *users.User, c *Connection) bool {
-	return u.IsPrivileged() || (c != nil && c.OwnerID == u.ID)
+	return u != nil && (u.IsPrivileged() || (c != nil && c.OwnerID == u.ID))
 }
 
 func (h *Handlers) List(c fiber.Ctx) error {
@@ -169,6 +173,9 @@ func (h *Handlers) Test(c fiber.Ctx) error {
 	conn, err := h.Svc.Get(c.Context(), c.Params("id"))
 	if err != nil {
 		return fiber.NewError(fiber.StatusNotFound, "connection not found")
+	}
+	if !canManage(user, conn) {
+		return fiber.NewError(fiber.StatusForbidden, "you cannot test this connection")
 	}
 	entry := audit.Entry{
 		UserID: user.ID, Action: audit.ActionConnectionTested, EntityType: "connection",

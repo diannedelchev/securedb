@@ -15,9 +15,11 @@
   </form>
   <div style="flex:1"></div>
   <span class="mono" style="font-size:11px;color:#64708A">{{len .Connections}} shown</span>
+  {{if .User.IsPrivileged}}
   <a class="btn-blue" href="/connections/new">
     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"></path></svg>New connection
   </a>
+  {{end}}
 </div>
 
 <div id="conn-table">
