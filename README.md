@@ -158,7 +158,7 @@ requester's account with the one-time **Run approved query** button.
 | **Query History** | Day-grouped timeline with risk badges, blocked-query callouts, expandable execution detail, replay & copy |
 | **Audit Logs** | Severity-coded event list with category pills, click-through detail panel (statement, actor, origin) — auditors/DBAs/admins only |
 | **Security Center** | Posture score computed from live policy config, threat timeline, blocked-queries chart, risk indicators, per-environment policy editors, masking rules |
-| **Users & Roles** | Role badges, permission summaries, per-user manage modal (roles + enable/disable), admin only |
+| **Users & Roles** | Role badges, permission summaries, per-user manage modal (roles + enable/disable), admin only. Every user can change their own password from the sidebar; doing so signs out their other sessions |
 | **Approval Requests** | Master-detail review of both request types: one-time query approvals (SQL, automated risk checks, risk meter) and **PAM access windows** — just-in-time, time-bound write grants (15m–8h) requested via the "Request access window" button, approved/revoked by Admins/DBAs (four-eyes). While a window is active, the holder's production writes run without per-query approval (tagged `JIT WINDOW`); hard guardrails and auditing still apply |
 
 ## Modules

@@ -80,6 +80,14 @@ func (s *Store) Delete(ctx context.Context, token string) error {
 	return err
 }
 
+// DeleteOthers revokes every session of a user except the one holding token,
+// so a password change signs out any other browser or stolen cookie.
+func (s *Store) DeleteOthers(ctx context.Context, userID, token string) error {
+	_, err := s.pool.Exec(ctx, `DELETE FROM sessions WHERE user_id=$1 AND token_hash<>$2`,
+		userID, security.HashToken(token))
+	return err
+}
+
 // Cleanup removes expired sessions; call periodically.
 func (s *Store) Cleanup(ctx context.Context) {
 	_, _ = s.pool.Exec(ctx, `DELETE FROM sessions WHERE expires_at < now()`)

@@ -85,8 +85,9 @@ func Register(app *fiber.App, d Deps) {
 	})
 
 	app.Post("/logout", d.Auth.Logout)
-	// Per-user UI preferences (any authenticated user, own profile only).
+	// Own profile only (any authenticated user): UI preferences and password.
 	app.Post("/profile/editor-layout", d.UserH.SaveEditorLayout)
+	app.Post("/profile/password", d.Auth.ChangePassword)
 	app.Get("/", d.Dashboard.Dashboard)
 	app.Get("/dashboard/volume", d.Dashboard.Volume)
 

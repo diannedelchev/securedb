@@ -14,6 +14,7 @@ import (
 const (
 	ActionLogin             = "login"
 	ActionLogout            = "logout"
+	ActionPasswordChanged   = "password_changed"
 	ActionLoginFailed       = "login_failed"
 	ActionConnectionCreated = "connection_created"
 	ActionConnectionUpdated = "connection_updated"
@@ -99,6 +100,7 @@ func (r *Record) Severity() string {
 	case r.Action == ActionQueryBlocked, r.Action == ActionLoginFailed:
 		return "CRITICAL"
 	case r.Status == "running", r.Status == "failure", r.Action == ActionUserRoleChanged, r.Action == ActionUserStatusChanged,
+		r.Action == ActionPasswordChanged,
 		r.Action == ActionPolicyUpdated, r.Action == ActionConnectionDeleted,
 		r.Action == ActionGrantApproved, r.Action == ActionGrantRevoked:
 		return "WARN"
@@ -117,6 +119,7 @@ func (r *Record) Title() string {
 	titles := map[string]string{
 		ActionLogin:             "Sign-in",
 		ActionLogout:            "Session ended",
+		ActionPasswordChanged:   "Password changed",
 		ActionLoginFailed:       "Failed sign-in",
 		ActionConnectionCreated: "Connection created",
 		ActionConnectionUpdated: "Connection updated",
@@ -147,7 +150,7 @@ func (r *Record) Title() string {
 
 // Categories for the filter pills, mapped to action sets.
 var Categories = map[string][]string{
-	"auth":    {ActionLogin, ActionLogout, ActionLoginFailed},
+	"auth":    {ActionLogin, ActionLogout, ActionLoginFailed, ActionPasswordChanged},
 	"queries": {ActionQueryExecuted, ActionQueryCancelled},
 	"denied":  {ActionQueryBlocked},
 	"exports": {ActionExportRequested},

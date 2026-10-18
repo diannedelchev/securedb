@@ -8,6 +8,7 @@ import (
 
 	"github.com/diannedelchev/securedb/internal/audit"
 	"github.com/diannedelchev/securedb/internal/users"
+	"github.com/diannedelchev/securedb/internal/web/view"
 )
 
 // Handlers implements local email/password login. The Authenticate call is the
@@ -65,6 +66,34 @@ func (h *Handlers) Login(c fiber.Ctx) error {
 		IP: ip, UserAgent: ua,
 	})
 	return c.Redirect().To("/")
+}
+
+// ChangePassword is the self-service credential change for the signed-in
+// user. It requires the current password and revokes the user's other
+// sessions on success; the HX-Trigger header lets the form close its modal.
+func (h *Handlers) ChangePassword(c fiber.Ctx) error {
+	user := CurrentUser(c)
+	current := c.FormValue("current_password")
+	next := c.FormValue("new_password")
+	if next != c.FormValue("confirm_password") {
+		return view.Toast(c, "error", "New password and confirmation do not match")
+	}
+	entry := audit.Entry{
+		UserID: user.ID, Action: audit.ActionPasswordChanged, EntityType: "user", EntityID: user.ID,
+		IP: c.IP(), UserAgent: c.Get("User-Agent"),
+	}
+	if err := h.Users.ChangePassword(c.Context(), user.ID, current, next); err != nil {
+		entry.Status = "failure"
+		entry.ErrorMessage = err.Error()
+		h.Audit.Log(c.Context(), entry)
+		return view.Toast(c, "error", err.Error())
+	}
+	if token, ok := c.Locals(LocalSession).(string); ok && token != "" {
+		_ = h.Store.DeleteOthers(c.Context(), user.ID, token)
+	}
+	h.Audit.Log(c.Context(), entry)
+	c.Set("HX-Trigger", "password-changed")
+	return view.Toast(c, "success", "Password changed; other sessions were signed out")
 }
 
 func (h *Handlers) Logout(c fiber.Ctx) error {

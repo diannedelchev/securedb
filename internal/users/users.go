@@ -189,9 +189,19 @@ func (s *Service) List(ctx context.Context) ([]*User, error) {
 	return out, rows.Err()
 }
 
+// MinPasswordLength applies to admin-created and self-chosen passwords alike.
+const MinPasswordLength = 8
+
+func validatePassword(password string) error {
+	if len(password) < MinPasswordLength {
+		return fmt.Errorf("password must be at least %d characters", MinPasswordLength)
+	}
+	return nil
+}
+
 func (s *Service) Create(ctx context.Context, email, displayName, password string, roles []string) (*User, error) {
-	if email == "" || displayName == "" || len(password) < 8 {
-		return nil, fmt.Errorf("email, name and a password of at least 8 characters are required")
+	if email == "" || displayName == "" || validatePassword(password) != nil {
+		return nil, fmt.Errorf("email, name and a password of at least %d characters are required", MinPasswordLength)
 	}
 	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	if err != nil {
@@ -233,6 +243,30 @@ func (s *Service) SetRoles(ctx context.Context, userID string, roles []string) e
 		return err
 	}
 	return tx.Commit(ctx)
+}
+
+// ChangePassword lets a user replace their own password after proving the
+// current one. Callers revoke the user's other sessions afterwards.
+func (s *Service) ChangePassword(ctx context.Context, userID, current, next string) error {
+	var hash string
+	if err := s.pool.QueryRow(ctx, `SELECT password_hash FROM users WHERE id=$1`, userID).Scan(&hash); err != nil {
+		return err
+	}
+	if bcrypt.CompareHashAndPassword([]byte(hash), []byte(current)) != nil {
+		return fmt.Errorf("current password is incorrect")
+	}
+	if err := validatePassword(next); err != nil {
+		return err
+	}
+	if next == current {
+		return fmt.Errorf("new password must differ from the current one")
+	}
+	newHash, err := bcrypt.GenerateFromPassword([]byte(next), bcrypt.DefaultCost)
+	if err != nil {
+		return err
+	}
+	_, err = s.pool.Exec(ctx, `UPDATE users SET password_hash=$2, updated_at=now() WHERE id=$1`, userID, string(newHash))
+	return err
 }
 
 func (s *Service) SetActive(ctx context.Context, userID string, active bool) error {

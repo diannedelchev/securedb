@@ -77,6 +77,9 @@
           <span class="user-name">{{.User.DisplayName}}</span>
           <span class="user-role">{{.User.RoleLabel}}</span>
         </div>
+        <button class="icon-btn" type="button" title="Change password" aria-label="Change password" onclick="openModal('password-modal')">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 2l-2 2m-7.6 7.6a5.5 5.5 0 1 1-7.8 7.8 5.5 5.5 0 0 1 7.8-7.8zm0 0L19 3m-3 3l2 2"></path></svg>
+        </button>
         <form method="post" action="/logout" title="Sign out">
           <input type="hidden" name="_csrf" value="{{.CSRF}}">
           <button class="icon-btn" type="submit" aria-label="Sign out">
@@ -112,6 +115,25 @@
     </main>
   </div>
 </div>
+{{if .User}}
+<!-- Self-service password change (own account only) -->
+<div class="modal-backdrop" id="password-modal" style="display:none">
+  <div class="modal">
+    <h2>Change password</h2>
+    <form hx-post="/profile/password" hx-target="#toast-sink"
+          hx-on:password-changed="closeModal('password-modal'); this.reset()">
+      <label class="field"><span class="lbl">CURRENT PASSWORD</span><input type="password" name="current_password" required autocomplete="current-password"></label>
+      <label class="field"><span class="lbl">NEW PASSWORD (MIN 8 CHARS)</span><input type="password" name="new_password" minlength="8" required autocomplete="new-password"></label>
+      <label class="field"><span class="lbl">CONFIRM NEW PASSWORD</span><input type="password" name="confirm_password" minlength="8" required autocomplete="new-password"></label>
+      <p class="hint">Changing your password signs out your other sessions.</p>
+      <div class="form-actions">
+        <button class="btn-blue" type="submit" style="height:32px">Change password</button>
+        <button class="btn-ghost" type="button" style="height:32px" onclick="closeModal('password-modal')">Cancel</button>
+      </div>
+    </form>
+  </div>
+</div>
+{{end}}
 <div id="toasts"></div>
 <div id="toast-sink" style="display:none"></div>
 </body>
